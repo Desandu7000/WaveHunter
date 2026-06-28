@@ -1,10 +1,49 @@
 import json
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from wavehunter import __version__, __author__
 from wavehunter.core.utils import format_bytes
 
-def generate_json_report(info: Dict[str, Any], candidates: List[Dict[str, Any]], output_path: str | Path):
+def _extended_sections(
+    modem_findings: Optional[List[Dict[str, Any]]] = None,
+    anomalies: Optional[List[Dict[str, Any]]] = None,
+    signal_summary: Optional[Dict[str, Any]] = None,
+    extraction_log: Optional[List[str]] = None,
+) -> List[str]:
+    """Build common extended report sections as text lines."""
+    lines: List[str] = []
+    if signal_summary:
+        lines.extend(["", "SIGNAL ANALYSIS:", "-" * 40])
+        for key, val in signal_summary.items():
+            lines.append(f"  {key}: {val}")
+    if modem_findings:
+        lines.extend(["", "MODEM DETECTIONS:", "-" * 40])
+        for m in modem_findings:
+            lines.append(f"  [{m.get('type', '?')}] {m.get('similarity', 0)*100:.1f}% — {m.get('reason', '')}")
+    if anomalies:
+        lines.extend(["", "STATISTICAL ANOMALIES:", "-" * 40])
+        for a in anomalies[:10]:
+            lines.append(
+                f"  Samples {a['start_sample']}-{a['end_sample']} "
+                f"(variance ratio {a['global_variance_ratio']:.2f}x)"
+            )
+    if extraction_log:
+        lines.extend(["", "EXTRACTION HISTORY:", "-" * 40])
+        for entry in extraction_log:
+            lines.append(f"  {entry}")
+    return lines
+
+def generate_json_report(
+    info: Dict[str, Any],
+    candidates: List[Dict[str, Any]],
+    output_path: str | Path,
+    *,
+    modem_findings: Optional[List[Dict[str, Any]]] = None,
+    anomalies: Optional[List[Dict[str, Any]]] = None,
+    signal_summary: Optional[Dict[str, Any]] = None,
+    stream_stats: Optional[List[Dict[str, Any]]] = None,
+    extraction_log: Optional[List[str]] = None,
+):
     """
     Saves the analysis results to a JSON file.
     """
@@ -12,16 +51,25 @@ def generate_json_report(info: Dict[str, Any], candidates: List[Dict[str, Any]],
         "wavehunter_version": __version__,
         "author": __author__,
         "audio_info": info,
-        # Exclude raw byte arrays from candidates in JSON to keep size small
-        "candidates": [
-            {k: v for k, v in c.items() if k != "data"}
-            for c in candidates
-        ]
+        "candidates": [{k: v for k, v in c.items() if k != "data"} for c in candidates],
+        "modem_findings": modem_findings or [],
+        "statistical_anomalies": anomalies or [],
+        "signal_summary": signal_summary or {},
+        "stream_statistics": stream_stats or [],
+        "extraction_log": extraction_log or [],
     }
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report_data, f, indent=4)
 
-def generate_text_report(info: Dict[str, Any], candidates: List[Dict[str, Any]]) -> str:
+def generate_text_report(
+    info: Dict[str, Any],
+    candidates: List[Dict[str, Any]],
+    *,
+    modem_findings: Optional[List[Dict[str, Any]]] = None,
+    anomalies: Optional[List[Dict[str, Any]]] = None,
+    signal_summary: Optional[Dict[str, Any]] = None,
+    extraction_log: Optional[List[str]] = None,
+) -> str:
     """
     Generates a plain text summary report of the analysis.
     """
@@ -55,13 +103,20 @@ def generate_text_report(info: Dict[str, Any], candidates: List[Dict[str, Any]])
             lines.append(f"   Hex Preview: {c['preview_hex'][:60]}...")
             lines.append(f"   Asc Preview: {c['preview_ascii'][:40]}")
             lines.append("-" * 60)
+
+    lines.extend(_extended_sections(modem_findings, anomalies, signal_summary, extraction_log))
             
     return "\n".join(lines)
 
 def generate_html_report(info: Dict[str, Any], 
                          candidates: List[Dict[str, Any]], 
                          entropy_data: List[float], 
-                         output_path: str | Path):
+                         output_path: str | Path,
+                         *,
+                         modem_findings: Optional[List[Dict[str, Any]]] = None,
+                         anomalies: Optional[List[Dict[str, Any]]] = None,
+                         signal_summary: Optional[Dict[str, Any]] = None,
+                         extraction_log: Optional[List[str]] = None):
     """
     Generates a premium dark-themed HTML forensics report.
     """
@@ -71,6 +126,32 @@ def generate_html_report(info: Dict[str, Any],
 
     # Convert entropy list to string for Javascript
     entropy_js_list = json.dumps(entropy_data)
+
+    modem_rows = ""
+    if modem_findings:
+        modem_rows = "".join(
+            f"<tr><td>{m.get('type','?')}</td><td>{m.get('similarity',0)*100:.1f}%</td><td>{m.get('reason','')}</td></tr>"
+            for m in modem_findings
+        )
+
+    anomaly_rows = ""
+    if anomalies:
+        anomaly_rows = "".join(
+            f"<tr><td>{a['start_sample']}</td><td>{a['end_sample']}</td>"
+            f"<td>{a['length_samples']}</td><td>{a['global_variance_ratio']:.2f}x</td></tr>"
+            for a in anomalies[:10]
+        )
+
+    signal_items = ""
+    if signal_summary:
+        signal_items = "".join(
+            f"<div class='info-item'><span class='label'>{k}</span><span class='value'>{v}</span></div>"
+            for k, v in signal_summary.items()
+        )
+
+    extraction_items = ""
+    if extraction_log:
+        extraction_items = "".join(f"<li>{e}</li>" for e in extraction_log)
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -582,6 +663,40 @@ def generate_html_report(info: Dict[str, Any],
                 ''' if low_candidates else ""}
             </div>
         </div>
+
+        {f'''
+        <div class="grid">
+            <div class="panel">
+                <h2>Signal Analysis</h2>
+                <div class="info-list">{signal_items or "<p style='color: var(--text-muted);'>No signal summary available.</p>"}</div>
+            </div>
+            <div class="panel">
+                <h2>Modem &amp; Modulation Detections</h2>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Type</th><th>Confidence</th><th>Findings</th></tr></thead>
+                        <tbody>{modem_rows or "<tr><td colspan='3'>No modulation patterns detected.</td></tr>"}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="panel">
+                <h2>Statistical Anomalies</h2>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Start</th><th>End</th><th>Length</th><th>Variance Ratio</th></tr></thead>
+                        <tbody>{anomaly_rows or "<tr><td colspan='4'>No anomalies detected.</td></tr>"}</tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Extraction History</h2>
+                <ul class="finding-details">{extraction_items or "<li>No extraction log.</li>"}</ul>
+            </div>
+        </div>
+        ''' if (signal_summary or modem_findings or anomalies or extraction_log) else ""}
 
         <footer>
             WaveHunter Toolkit &bull; v{__version__} &bull; Desandu Hettiarachchi &bull; 2026

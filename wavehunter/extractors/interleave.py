@@ -24,53 +24,76 @@ def pack_to_bytes(arr: np.ndarray, bits_per_sample: int) -> bytes:
 
 def extract_interleaved(raw_samples: np.ndarray, bits_per_sample: int) -> List[Dict[str, Any]]:
     """
-    Analyzes interleaved channels, swaps Left/Right channels, and separates odd/even samples.
+    Reconstructs and extracts sample layouts systematically:
+    - LLLL: Mono Left
+    - RRRR: Mono Right
+    - LRLR: Standard stereo interleaving
+    - RLRL: Swapped stereo interleaving
+    - LLRR: Two left samples, two right samples
+    - RRLL: Two right samples, two left samples
     """
     candidates = []
     n_samples, n_channels = raw_samples.shape
     
     if n_channels >= 2:
-        # Swap Left and Right
-        swapped = np.zeros_like(raw_samples)
-        swapped[:, 0] = raw_samples[:, 1]
-        swapped[:, 1] = raw_samples[:, 0]
-        # Rest of channels copy if any
-        if n_channels > 2:
-            swapped[:, 2:] = raw_samples[:, 2:]
+        left = raw_samples[:, 0]
+        right = raw_samples[:, 1]
+        
+        # 1. LLLL (Mono Left)
+        candidates.append({
+            "name": "Layout LLLL (Mono Left)",
+            "source": "layout_llll",
+            "data": pack_to_bytes(left, bits_per_sample)
+        })
+        
+        # 2. RRRR (Mono Right)
+        candidates.append({
+            "name": "Layout RRRR (Mono Right)",
+            "source": "layout_rrrr",
+            "data": pack_to_bytes(right, bits_per_sample)
+        })
+        
+        # 3. LRLR (Standard Interleaved Stereo)
+        candidates.append({
+            "name": "Layout LRLR (Standard Stereo)",
+            "source": "layout_lrlr",
+            "data": pack_to_bytes(raw_samples.flatten(), bits_per_sample)
+        })
+        
+        # 4. RLRL (Swapped Interleaved Stereo)
+        swapped = raw_samples[:, [1, 0]].flatten()
+        candidates.append({
+            "name": "Layout RLRL (Swapped Stereo)",
+            "source": "layout_rlrl",
+            "data": pack_to_bytes(swapped, bits_per_sample)
+        })
+        
+        # 5. LLRR (Two left samples, two right samples)
+        n_frames = n_samples // 2
+        if n_frames > 0:
+            l_grouped = left[:n_frames * 2].reshape(-1, 2)
+            r_grouped = right[:n_frames * 2].reshape(-1, 2)
+            llrr = np.stack([l_grouped, r_grouped], axis=1).flatten()
+            candidates.append({
+                "name": "Layout LLRR (Pair interleaved)",
+                "source": "layout_llrr",
+                "data": pack_to_bytes(llrr, bits_per_sample)
+            })
             
-        candidates.append({
-            "name": "Swapped Channels (L <-> R)",
-            "source": "channels_swapped",
-            "data": pack_to_bytes(swapped.flatten(), bits_per_sample)
-        })
-        
-        # Even-indexed frames (samples)
-        even_frames = raw_samples[0::2, :]
-        candidates.append({
-            "name": "Interleaved Even Frames",
-            "source": "interleaved_even_frames",
-            "data": pack_to_bytes(even_frames.flatten(), bits_per_sample)
-        })
-        
-        # Odd-indexed frames (samples)
-        odd_frames = raw_samples[1::2, :]
-        candidates.append({
-            "name": "Interleaved Odd Frames",
-            "source": "interleaved_odd_frames",
-            "data": pack_to_bytes(odd_frames.flatten(), bits_per_sample)
-        })
+            # 6. RRLL (Two right samples, two left samples)
+            rrll = np.stack([r_grouped, l_grouped], axis=1).flatten()
+            candidates.append({
+                "name": "Layout RRLL (Pair interleaved swapped)",
+                "source": "layout_rrll",
+                "data": pack_to_bytes(rrll, bits_per_sample)
+            })
     else:
-        # Mono even/odd samples
+        # Mono defaults
         flat = raw_samples.flatten()
         candidates.append({
-            "name": "Even Samples (Mono)",
-            "source": "mono_even_samples",
-            "data": pack_to_bytes(flat[0::2], bits_per_sample)
+            "name": "Layout Mono Raw",
+            "source": "layout_mono_raw",
+            "data": pack_to_bytes(flat, bits_per_sample)
         })
-        candidates.append({
-            "name": "Odd Samples (Mono)",
-            "source": "mono_odd_samples",
-            "data": pack_to_bytes(flat[1::2], bits_per_sample)
-        })
-
+        
     return candidates

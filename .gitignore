@@ -24,8 +24,12 @@ wheels/
 htmlcov/
 .idea/
 .vscode/
+
+# Audio Files & Stego Output Files
 *.wav
 *.mp3
-report.html
-report.json
-report.txt
+*.bin
+*.jpg
+*report.html
+*report.json
+*report.txt

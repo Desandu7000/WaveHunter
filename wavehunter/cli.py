@@ -7,25 +7,20 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 
-# WaveHunter modules
 from wavehunter import __version__, __author__
 from wavehunter.core.audio import WavFile
-from wavehunter.core.entropy import sliding_window_entropy, shannon_entropy
-from wavehunter.core.scoring import rank_candidates
+from wavehunter.core.entropy import shannon_entropy
+from wavehunter.core.pipeline import run_full_analysis
 from wavehunter.core.report import generate_html_report, generate_json_report, generate_text_report
 
-# Extractors
-from wavehunter.extractors.bitplanes import extract_all_bitplanes, extract_bitplane
+from wavehunter.extractors.bitplanes import extract_bitplane
 from wavehunter.extractors.channels import extract_channels
-from wavehunter.extractors.interleave import extract_interleaved
 from wavehunter.extractors.stride import extract_strided
 from wavehunter.extractors.reverse import extract_reversed
 from wavehunter.extractors.graycode import extract_graycode
 from wavehunter.extractors.delta import extract_delta
 from wavehunter.extractors.phase import extract_phase
-from wavehunter.extractors.printable import extract_printable_text
 
-# Scanners
 from wavehunter.scanners.magic import scan_magic
 from wavehunter.scanners.regex import scan_regex
 from wavehunter.scanners.ascii import scan_ascii
@@ -73,7 +68,6 @@ def analyze(
         
     info = wav.info_dict
     
-    # Render Metadata Table
     table = Table(title="Audio File Metadata", show_header=True, header_style="bold blue")
     table.add_column("Property", style="cyan")
     table.add_column("Value", style="magenta")
@@ -89,76 +83,52 @@ def analyze(
     
     console.print(table)
     
-    candidates = []
-    
-    # Run pipeline with progress bar
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console
     ) as progress:
-        # Task 1: Bitplane
-        task = progress.add_task("[cyan]Extracting bitplanes...", total=1)
-        candidates.extend(extract_all_bitplanes(wav.raw_samples, wav.bits_per_sample))
-        progress.update(task, completed=1)
-        
-        # Task 2: Channel Math
-        task = progress.add_task("[cyan]Extracting channels & logical products...", total=1)
-        candidates.extend(extract_channels(wav.raw_samples, wav.bits_per_sample))
-        progress.update(task, completed=1)
-        
-        # Task 3: Stereo Interleaving
-        task = progress.add_task("[cyan]Extracting interleaved frames...", total=1)
-        candidates.extend(extract_interleaved(wav.raw_samples, wav.bits_per_sample))
-        progress.update(task, completed=1)
-        
-        # Task 4: Sample Strides
-        task = progress.add_task("[cyan]Extracting strided bitstreams...", total=1)
-        candidates.extend(extract_strided(wav.raw_samples, wav.bits_per_sample))
-        progress.update(task, completed=1)
-        
-        # Task 5: Reversals
-        task = progress.add_task("[cyan]Extracting reversed audio streams...", total=1)
-        candidates.extend(extract_reversed(wav.raw_samples, wav.bits_per_sample))
-        progress.update(task, completed=1)
-        
-        # Task 6: Gray Decoding
-        task = progress.add_task("[cyan]Extracting Gray-decoded sequences...", total=1)
-        candidates.extend(extract_graycode(wav.raw_samples, wav.bits_per_sample))
-        progress.update(task, completed=1)
-        
-        # Task 7: Delta Decoding
-        task = progress.add_task("[cyan]Extracting Delta-decoded streams...", total=1)
-        candidates.extend(extract_delta(wav.raw_samples, wav.bits_per_sample))
-        progress.update(task, completed=1)
-        
-        # Task 8: Phase Coding
-        task = progress.add_task("[cyan]Extracting Fourier phase bits...", total=1)
-        candidates.extend(extract_phase(wav.normalized_samples))
-        progress.update(task, completed=1)
-        
-        # Task 9: Printable Text
-        task = progress.add_task("[cyan]Extracting raw printable text segments...", total=1)
-        candidates.extend(extract_printable_text(wav.raw_samples, wav.bits_per_sample))
+        task = progress.add_task("[cyan]Running full forensic analysis pipeline...", total=1)
+        result = run_full_analysis(wav)
         progress.update(task, completed=1)
 
-        # Task 10: Trailer
-        if wav.trailer_data:
-            task = progress.add_task("[bold red]Extracting appended WAV trailer...", total=1)
-            candidates.append({
-                "name": "WAV Trailer (Appended Bytes)",
-                "source": "wav_trailer_payload",
-                "data": wav.trailer_data
-            })
-            progress.update(task, completed=1)
+    ranked = result.ranked
 
-        # Task 11: Scoring & Ranking
-        task = progress.add_task("[cyan]Scoring & ranking stego candidates...", total=1)
-        ranked = rank_candidates(candidates)
-        progress.update(task, completed=1)
-        
-    # Render Findings
-    console.print("\n[yellow][*][/yellow] [bold]Analysis Summary - Top Suspicious Findings:[/bold]\n")
+    if result.signal_summary:
+        sig_table = Table(title="Signal Characteristics", show_header=True, header_style="bold blue")
+        sig_table.add_column("Metric", style="cyan")
+        sig_table.add_column("Value", style="magenta")
+        for key, val in result.signal_summary.items():
+            if isinstance(val, float):
+                sig_table.add_row(key, f"{val:.4f}")
+            else:
+                sig_table.add_row(key, str(val))
+        console.print(sig_table)
+        console.print()
+
+    if result.modem_findings:
+        modem_table = Table(title="Digital Modem Carrier Detections", show_header=True, header_style="bold green")
+        modem_table.add_column("Modulation Type", style="cyan")
+        modem_table.add_column("Confidence", style="magenta")
+        modem_table.add_column("Technical Findings", style="white")
+        for m in result.modem_findings:
+            modem_table.add_row(m["type"], f"{m['similarity']*100:.1f}%", m["reason"])
+        console.print(modem_table)
+        console.print()
+
+    if result.anomalies:
+        anomaly_table = Table(title="Statistical Amplitude Anomalies", show_header=True, header_style="bold yellow")
+        anomaly_table.add_column("Start Sample", style="cyan")
+        anomaly_table.add_column("End Sample", style="cyan")
+        anomaly_table.add_column("Length", style="green")
+        anomaly_table.add_column("Variance Ratio", style="magenta")
+        for a in result.anomalies[:5]:
+            anomaly_table.add_row(str(a["start_sample"]), str(a["end_sample"]), f"{a['length_samples']} samples", f"{a['global_variance_ratio']:.2f}x")
+        console.print(anomaly_table)
+        console.print()
+
+    console.print(f"[dim]Extraction pipeline: {len(result.candidates)} raw candidates from {len(result.extraction_log)} extractors[/dim]")
+    console.print("[yellow][*][/yellow] [bold]Analysis Summary - Top Suspicious Findings:[/bold]\n")
     
     findings_table = Table(show_header=True, header_style="bold blue")
     findings_table.add_column("Rating", style="yellow", justify="center")
@@ -169,7 +139,7 @@ def analyze(
     
     interesting = [r for r in ranked if r["rating"] >= 2]
     
-    for r in interesting[:10]:
+    for r in interesting[:15]:
         findings_table.add_row(
             r["stars"],
             r["name"],
@@ -179,24 +149,32 @@ def analyze(
         )
         
     if not interesting:
-        console.print(Panel("No suspicious steganography or hidden payloads found in the audio stream.", style="green"))
+        console.print(Panel("No suspicious steganography or validated payloads found in the audio stream.", style="green"))
     else:
         console.print(findings_table)
         
-    # Write Reports
+    report_kwargs = dict(
+        modem_findings=result.modem_findings,
+        anomalies=result.anomalies,
+        signal_summary=result.signal_summary,
+        extraction_log=result.extraction_log,
+    )
+
     if txt_report:
-        txt_str = generate_text_report(info, ranked)
+        txt_str = generate_text_report(info, ranked, **report_kwargs)
         txt_report.write_text(txt_str, encoding="utf-8")
         console.print(f"[green][+][/green] Text report saved to: [bold white]{txt_report}[/bold white]")
         
     if json_report:
-        generate_json_report(info, ranked, json_report)
+        generate_json_report(
+            info, ranked, json_report,
+            stream_stats=result.stream_stats,
+            **report_kwargs,
+        )
         console.print(f"[green][+][/green] JSON report saved to: [bold white]{json_report}[/bold white]")
         
     if html_report:
-        # Generate sliding window entropy of raw data chunk bytes for the HTML chart
-        ent_data = sliding_window_entropy(wav.raw_data_bytes, window_size=2048, step_size=1024)
-        generate_html_report(info, ranked, ent_data, html_report)
+        generate_html_report(info, ranked, result.entropy_windows, html_report, **report_kwargs)
         console.print(f"[green][+][/green] Interactive HTML report dashboard saved to: [bold white]{html_report}[/bold white]")
 
 @app.command()
@@ -206,6 +184,7 @@ def extract(
     channel: int = typer.Option(0, "--channel", "-c", help="Channel index to extract (starting at 0)."),
     bit: int = typer.Option(0, "--bit", "-b", help="Bit position (0 for LSB)."),
     stride: int = typer.Option(2, "--stride", "-s", help="Stride interval (for stride extractor)."),
+    offset: int = typer.Option(0, "--offset", help="Stride starting offset."),
     pack: str = typer.Option("msb", "--pack", "-p", help="Bit packing order: msb or lsb."),
     out: Path = typer.Option(..., "--out", "-o", help="Output file path to save extracted bytes.")
 ):
@@ -226,9 +205,7 @@ def extract(
         
     elif extractor == "channel":
         console.print(f"[yellow][*][/yellow] Extracting [bold]channel {channel}[/bold] raw stream...")
-        # Get channel raw stream
         ch_candidates = extract_channels(wav.raw_samples, wav.bits_per_sample)
-        # Search for requested channel
         target_src = f"channel_{channel}_raw"
         for cand in ch_candidates:
             if cand["source"] == target_src:
@@ -245,9 +222,9 @@ def extract(
                 break
                 
     elif extractor == "stride":
-        console.print(f"[yellow][*][/yellow] Extracting strided samples with stride {stride}...")
+        console.print(f"[yellow][*][/yellow] Extracting strided samples with stride {stride} offset {offset}...")
         strides = extract_strided(wav.raw_samples, wav.bits_per_sample)
-        target_src = f"stride_samples_ch{channel}_s{stride}"
+        target_src = f"stride_samples_ch{channel}_s{stride}_o{offset}"
         for cand in strides:
             if cand["source"] == target_src:
                 extracted_bytes = cand["data"]
@@ -360,7 +337,6 @@ def scan(
 
     if asciis:
         console.print(f"[green][+][/green] Found [bold]{len(asciis)}[/bold] readable ASCII text strings (min length 6).")
-        # Print first 10
         for idx, a in enumerate(asciis[:15]):
             console.print(f"  [cyan]0x{a['offset']:08x}[/cyan]: '{a['text']}'")
         if len(asciis) > 15:

@@ -98,7 +98,43 @@ SIGNATURES: List[Dict[str, Any]] = [
         "footer": None,
         "extension": "sqlite",
         "min_size": 100
-    }
+    },
+    {
+        "name": "WAV Audio",
+        "header": b"RIFF",
+        "footer": None,
+        "extension": "wav",
+        "min_size": 44,
+        "header_check": lambda d, idx: idx + 12 <= len(d) and d[idx + 8 : idx + 12] == b"WAVE",
+    },
+    {
+        "name": "BMP Image",
+        "header": b"BM",
+        "footer": None,
+        "extension": "bmp",
+        "min_size": 54,
+    },
+    {
+        "name": "MP3 Audio (ID3)",
+        "header": b"ID3",
+        "footer": None,
+        "extension": "mp3",
+        "min_size": 10,
+    },
+    {
+        "name": "MP3 Audio (MPEG sync)",
+        "header": b"\xff\xfb",
+        "footer": None,
+        "extension": "mp3",
+        "min_size": 4,
+    },
+    {
+        "name": "OGG Audio",
+        "header": b"OggS",
+        "footer": None,
+        "extension": "ogg",
+        "min_size": 27,
+    },
 ]
 
 def find_signatures(data: bytes) -> List[Dict[str, Any]]:
@@ -119,7 +155,12 @@ def find_signatures(data: bytes) -> List[Dict[str, Any]]:
             idx = data.find(header, start)
             if idx == -1:
                 break
-                
+
+            header_check = sig.get("header_check")
+            if header_check is not None and not header_check(data, idx):
+                start = idx + 1
+                continue
+
             match_info = {
                 "name": sig["name"],
                 "extension": sig["extension"],

@@ -5,6 +5,8 @@ from wavehunter.scanners.regex import scan_regex
 from wavehunter.scanners.magic import scan_magic
 from wavehunter.scanners.compression import scan_compression
 from wavehunter.core.utils import format_bytes
+from wavehunter.core.validation import validate_embedded_file
+from wavehunter.core.stats import compute_printable_ratio
 
 def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -26,6 +28,7 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
 
     # 1. Calculate entropy
     entropy = shannon_entropy(data)
+    printable_ratio = compute_printable_ratio(data)
     
     # 2. Run scanners
     magic_matches = scan_magic(data)
@@ -46,20 +49,29 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
         for f in flags:
             findings.append(f"Flag: {f['value']}")
             
-    # Check for embedded files with high confidence (e.g. matching footer)
+    # Check for embedded files with active parser validation
     elif magic_matches:
         best_magic = magic_matches[0]
-        # If we have a file with an estimated size or starts at offset 0
-        if best_magic["confidence"] == "high":
-            rating = 5
-            size_str = format_bytes(best_magic["estimated_size"]) if best_magic["estimated_size"] else "unknown size"
-            reason = f"Embedded file signature: {best_magic['name']} ({size_str})"
+        carved = data[best_magic["start_offset"]:]
+        if best_magic["end_offset"] is not None:
+            carved = data[best_magic["start_offset"]:best_magic["end_offset"]]
+            
+        is_valid, validation_detail = validate_embedded_file(carved, best_magic["name"])
+        
+        if is_valid:
+            if best_magic["confidence"] == "high":
+                rating = 5
+                size_str = format_bytes(best_magic["estimated_size"]) if best_magic["estimated_size"] else "unknown size"
+                reason = f"Verified embedded file: {best_magic['name']} ({size_str}) — {validation_detail}"
+            else:
+                rating = 4
+                reason = f"Verified potential embedded file: {best_magic['name']} at offset {best_magic['start_offset']} — {validation_detail}"
         else:
-            rating = 4
-            reason = f"Potential embedded file header: {best_magic['name']} at offset {best_magic['start_offset']}"
+            rating = 2
+            reason = f"False positive: magic header for {best_magic['name']} rejected by parser ({validation_detail})"
             
         for m in magic_matches:
-            findings.append(f"Magic Signature: {m['name']} at offset {m['start_offset']}")
+            findings.append(f"Magic Signature: {m['name']} at offset {m['start_offset']} (Validated: {is_valid})")
             
     # Check for compressed streams
     elif compression_matches:
@@ -69,7 +81,6 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
         decomp_size = format_bytes(best_comp["decompressed_size"])
         reason = f"Compressed stream ({best_comp['type']}) found. Size: {comp_size} -> Decompressed: {decomp_size}"
         
-        # Check if the decompressed stream itself contains flags or text
         decomp_flags = scan_regex(best_comp["decompressed_data"])
         decomp_flags = [m for m in decomp_flags if m["type"] == "Flag"]
         if decomp_flags:
@@ -89,7 +100,7 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
             for r in non_flag_regexes:
                 findings.append(f"Regex ({r['type']}): {r['value']}")
 
-    # Check for ASCII density
+    # Check for ASCII density and structured text
     else:
         total_ascii_len = sum(len(m["text"]) for m in ascii_matches)
         ascii_ratio = total_ascii_len / len(data) if len(data) > 0 else 0
@@ -98,12 +109,15 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
             rating = 3
             reason = f"High density printable text: {ascii_ratio*100:.1f}% of stream"
             findings.append(f"ASCII density: {ascii_ratio*100:.1f}%")
+        elif printable_ratio >= 0.15 and len(data) >= 64:
+            rating = 3
+            reason = f"Structured printable content: {printable_ratio*100:.1f}% printable bytes"
+            findings.append(f"Printable ratio: {printable_ratio*100:.1f}%")
         elif len(ascii_matches) > 0:
             rating = 2
             reason = f"Contains printable strings (e.g. '{ascii_matches[0]['text'][:30]}...')"
             findings.append(f"Printable strings count: {len(ascii_matches)}")
         elif 7.95 <= entropy <= 8.0:
-            # LSB or payload is extremely uniform/high-entropy, typical of encryption or compressed stego
             rating = 2
             reason = f"Anomalous high entropy ({entropy:.4f}), potential encrypted/random payload"
             findings.append(f"Anomalous entropy: {entropy:.4f}")
@@ -116,7 +130,6 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
         5: "★★★★★"
     }
     
-    # Store clean preview of candidates
     preview = data[:64]
     
     return {
@@ -124,6 +137,7 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "source": source,
         "size": len(data),
         "entropy": entropy,
+        "printable_ratio": printable_ratio,
         "rating": rating,
         "stars": stars_map[rating],
         "reason": reason,
@@ -144,10 +158,8 @@ def rank_candidates(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     scored = []
     for c in candidates:
         res = score_candidate(c)
-        # Keep everything with rating > 1, or rating 1 if it has interesting details
         if res["rating"] > 1 or res["entropy"] > 7.5 or "trailer" in res["source"]:
             scored.append(res)
             
-    # Sort: rating (descending), then entropy (descending)
     scored.sort(key=lambda x: (-x["rating"], -x["entropy"]))
     return scored
