@@ -9,6 +9,8 @@ def _extended_sections(
     anomalies: Optional[List[Dict[str, Any]]] = None,
     signal_summary: Optional[Dict[str, Any]] = None,
     extraction_log: Optional[List[str]] = None,
+    sigint_report: Optional[Dict[str, Any]] = None,
+    recursive_results: Optional[List[Any]] = None,
 ) -> List[str]:
     """Build common extended report sections as text lines."""
     lines: List[str] = []
@@ -16,6 +18,18 @@ def _extended_sections(
         lines.extend(["", "SIGNAL ANALYSIS:", "-" * 40])
         for key, val in signal_summary.items():
             lines.append(f"  {key}: {val}")
+    if sigint_report:
+        lines.extend(["", "SIGINT PATTERN INTELLIGENCE FINDINGS:", "-" * 40])
+        findings = sigint_report.get("findings", [])
+        for f in findings:
+            lines.append(f"  [{f['type']}] ({f['confidence']*100:.1f}% confidence) via path '{' -> '.join(f['path'])}': {f['value']}")
+        
+        recs = sigint_report.get("recommendations", [])
+        if recs:
+            lines.extend(["", "RECOMMENDATIONS:", "-" * 40])
+            for r in recs:
+                lines.append(f"  - {r}")
+                
     if modem_findings:
         lines.extend(["", "MODEM DETECTIONS:", "-" * 40])
         for m in modem_findings:
@@ -27,6 +41,13 @@ def _extended_sections(
                 f"  Samples {a['start_sample']}-{a['end_sample']} "
                 f"(variance ratio {a['global_variance_ratio']:.2f}x)"
             )
+    if recursive_results:
+        lines.extend(["", "RECURSIVE EMBEDDED FORENSIC RESULTS:", "=" * 40])
+        for r in recursive_results:
+            lines.append(f"  Nested File: {r.info['file_name']}")
+            lines.append(f"  Top Candidates Found: {len(r.ranked)}")
+            for idx, c in enumerate(r.ranked[:3]):
+                lines.append(f"    - {c['name']} [{c['stars']}] (Reason: {c['reason']})")
     if extraction_log:
         lines.extend(["", "EXTRACTION HISTORY:", "-" * 40])
         for entry in extraction_log:
@@ -43,10 +64,22 @@ def generate_json_report(
     signal_summary: Optional[Dict[str, Any]] = None,
     stream_stats: Optional[List[Dict[str, Any]]] = None,
     extraction_log: Optional[List[str]] = None,
+    sigint_report: Optional[Dict[str, Any]] = None,
+    recursive_results: Optional[List[Any]] = None,
 ):
     """
     Saves the analysis results to a JSON file.
     """
+    def serialize_nested(res):
+        if not res:
+            return []
+        return [{
+            "audio_info": r.info,
+            "candidates": [{k: v for k, v in c.items() if k != "data"} for c in r.ranked],
+            "sigint_report": r.sigint_report,
+            "recursive_results": serialize_nested(r.recursive_results)
+        } for r in res]
+
     report_data = {
         "wavehunter_version": __version__,
         "author": __author__,
@@ -57,6 +90,8 @@ def generate_json_report(
         "signal_summary": signal_summary or {},
         "stream_statistics": stream_stats or [],
         "extraction_log": extraction_log or [],
+        "sigint_report": sigint_report or {},
+        "recursive_results": serialize_nested(recursive_results),
     }
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report_data, f, indent=4)
@@ -69,6 +104,8 @@ def generate_text_report(
     anomalies: Optional[List[Dict[str, Any]]] = None,
     signal_summary: Optional[Dict[str, Any]] = None,
     extraction_log: Optional[List[str]] = None,
+    sigint_report: Optional[Dict[str, Any]] = None,
+    recursive_results: Optional[List[Any]] = None,
 ) -> str:
     """
     Generates a plain text summary report of the analysis.
@@ -104,7 +141,7 @@ def generate_text_report(
             lines.append(f"   Asc Preview: {c['preview_ascii'][:40]}")
             lines.append("-" * 60)
 
-    lines.extend(_extended_sections(modem_findings, anomalies, signal_summary, extraction_log))
+    lines.extend(_extended_sections(modem_findings, anomalies, signal_summary, extraction_log, sigint_report, recursive_results))
             
     return "\n".join(lines)
 
@@ -116,7 +153,9 @@ def generate_html_report(info: Dict[str, Any],
                          modem_findings: Optional[List[Dict[str, Any]]] = None,
                          anomalies: Optional[List[Dict[str, Any]]] = None,
                          signal_summary: Optional[Dict[str, Any]] = None,
-                         extraction_log: Optional[List[str]] = None):
+                         extraction_log: Optional[List[str]] = None,
+                         sigint_report: Optional[Dict[str, Any]] = None,
+                         recursive_results: Optional[List[Any]] = None):
     """
     Generates a premium dark-themed HTML forensics report.
     """
@@ -152,6 +191,74 @@ def generate_html_report(info: Dict[str, Any],
     extraction_items = ""
     if extraction_log:
         extraction_items = "".join(f"<li>{e}</li>" for e in extraction_log)
+
+    sigint_recs_html = ""
+    if sigint_report and sigint_report.get("recommendations"):
+        recs = "".join(f"<li>{r}</li>" for r in sigint_report["recommendations"])
+        sigint_recs_html = f"<div><strong>Recommendations:</strong><ul class='finding-details' style='margin-top: 0.5rem;'>{recs}</ul></div>"
+
+    sigint_findings_html = ""
+    if sigint_report and sigint_report.get("findings"):
+        rows = "".join(
+            f"<tr><td>{f['source']}</td><td><code>{' -> '.join(f['path'])}</code></td><td>{f['type']}</td><td style='font-family: monospace; word-break: break-all;'>{f['value']}</td><td>{f['confidence']*100:.1f}%</td></tr>"
+            for f in sigint_report["findings"]
+        )
+        sigint_findings_html = f"""
+        <div style="margin-top: 1.5rem;">
+            <strong>Ranked Intelligence Findings:</strong>
+            <div class="table-container" style="margin-top: 0.5rem;">
+                <table>
+                    <thead><tr><th>Source</th><th>Path</th><th>Type</th><th>Value</th><th>Confidence</th></tr></thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </div>
+        </div>
+        """
+
+    sigint_panel = ""
+    if sigint_recs_html or sigint_findings_html:
+        sigint_panel = f"""
+        <div class="grid" style="margin-top: 2rem;">
+            <div class="panel" style="grid-column: span 2;">
+                <h2>SIGINT Pattern Intelligence &amp; Heuristics</h2>
+                {sigint_recs_html}
+                {sigint_findings_html}
+            </div>
+        </div>
+        """
+
+    recursive_panel = ""
+    if recursive_results:
+        nested_cards = ""
+        for r in recursive_results:
+            cand_rows = "".join(
+                f"<tr><td>{c['name']}</td><td>{c['stars']}</td><td>{c['entropy']:.4f}</td><td>{c['reason']}</td></tr>"
+                for c in r.ranked[:5]
+            )
+            nested_cards += f"""
+            <div class="finding-card star-5" style="margin-top: 1rem; border-left: 4px solid var(--accent-primary);">
+                <div class="finding-header">
+                    <div>
+                        <div class="finding-title" style="color: var(--accent-primary);">{r.info['file_name']}</div>
+                        <span class="finding-source">Size: {r.info['file_size']} B | Format: {r.info['audio_format']} | Channels: {r.info['channels']}</span>
+                    </div>
+                </div>
+                <div class="table-container" style="margin-top: 0.5rem;">
+                    <table>
+                        <thead><tr><th>Name</th><th>Rating</th><th>Entropy</th><th>Reason</th></tr></thead>
+                        <tbody>{cand_rows or "<tr><td colspan='4'>No candidates found.</td></tr>"}</tbody>
+                    </table>
+                </div>
+            </div>
+            """
+        recursive_panel = f"""
+        <div class="grid" style="margin-top: 2rem;">
+            <div class="panel" style="grid-column: span 2;">
+                <h2>Recursive Embedded Payload Forensics</h2>
+                {nested_cards}
+            </div>
+        </div>
+        """
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -697,6 +804,9 @@ def generate_html_report(info: Dict[str, Any],
             </div>
         </div>
         ''' if (signal_summary or modem_findings or anomalies or extraction_log) else ""}
+
+        {sigint_panel}
+        {recursive_panel}
 
         <footer>
             WaveHunter Toolkit &bull; v{__version__} &bull; Desandu Hettiarachchi &bull; 2026

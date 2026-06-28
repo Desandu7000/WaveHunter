@@ -3,8 +3,14 @@ Analysis pipeline orchestrating all WaveHunter extractors, scanners, and signal 
 """
 from __future__ import annotations
 
+import io
+import os
+import tempfile
+import zipfile
+import gzip
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -38,6 +44,9 @@ from wavehunter.extractors.relationships import extract_relationships
 from wavehunter.extractors.reverse import extract_reversed
 from wavehunter.extractors.stride import extract_strided
 
+# SIGINT v2.0 Imports
+from wavehunter.sigint.heuristics.coordinator import coordinate_sigint_analysis
+from wavehunter.sigint.reconstruction.signals import reconstruct_signal_variations
 
 @dataclass
 class AnalysisResult:
@@ -52,13 +61,15 @@ class AnalysisResult:
     stream_stats: List[Dict[str, Any]] = field(default_factory=list)
     extraction_log: List[str] = field(default_factory=list)
     entropy_windows: List[float] = field(default_factory=list)
-
+    
+    # SIGINT v2.0 Additions
+    sigint_report: Dict[str, Any] = field(default_factory=dict)
+    recursive_results: List[AnalysisResult] = field(default_factory=list)
 
 def _run_extractor(name: str, fn, *args, log: List[str]) -> List[Dict[str, Any]]:
     results = fn(*args)
     log.append(f"{name}: {len(results)} candidates")
     return results
-
 
 def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[str]]:
     """Run all steganography extractors and return raw candidates + extraction log."""
@@ -138,9 +149,12 @@ def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[st
 
     return candidates, log
 
-
-def run_full_analysis(wav: WavFile) -> AnalysisResult:
-    """Execute the complete WaveHunter forensic analysis pipeline."""
+def run_full_analysis(
+    wav: WavFile, 
+    depth: int = 0, 
+    max_depth: int = 2
+) -> AnalysisResult:
+    """Execute the complete WaveHunter forensic analysis pipeline with recursive processing."""
     candidates, extraction_log = run_extraction_pipeline(wav)
     ranked = rank_candidates(candidates)
 
@@ -168,7 +182,11 @@ def run_full_analysis(wav: WavFile) -> AnalysisResult:
 
     entropy_windows = sliding_window_entropy(wav.raw_data_bytes, window_size=2048, step_size=1024)
 
-    return AnalysisResult(
+    # Run SIGINT Coordinator
+    sigint_report = coordinate_sigint_analysis(wav.normalized_samples, wav.sample_rate, max_depth=max_depth)
+
+    # Compile initial AnalysisResult
+    result = AnalysisResult(
         info=wav.info_dict,
         candidates=candidates,
         ranked=ranked,
@@ -178,4 +196,99 @@ def run_full_analysis(wav: WavFile) -> AnalysisResult:
         stream_stats=stream_stats,
         extraction_log=extraction_log,
         entropy_windows=entropy_windows,
+        sigint_report=sigint_report,
+        recursive_results=[]
     )
+
+    # Recursive payload exploration (Phase 6)
+    if depth < max_depth:
+        # Check top ranked candidates and trailer data for embedded audio or archives
+        payloads_to_check: List[Tuple[str, bytes]] = []
+        
+        # Add trailer
+        if wav.trailer_data:
+            payloads_to_check.append(("Trailer Payload", wav.trailer_data))
+            
+        # Add top 5 candidates
+        for cand in ranked[:5]:
+            raw_data = data_by_source.get(cand["source"])
+            if raw_data:
+                payloads_to_check.append((cand["name"], raw_data))
+                
+        # Also check demodulated findings from SIGINT
+        for finding in sigint_report.get("findings", []):
+            # If we don't have the raw bytes of findings, skip, but we can reconstruct or scan
+            pass
+
+        for name, data in payloads_to_check:
+            # 1. Check for embedded WAV file
+            if data.startswith(b"RIFF") and b"WAVE" in data[:20]:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+                        tf.write(data)
+                        tf.flush()
+                        temp_path = Path(tf.name)
+                        
+                    nested_wav = WavFile(temp_path)
+                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth)
+                    nested_result.info["file_name"] = f"[Embedded WAV in {name}] {nested_result.info['file_name']}"
+                    result.recursive_results.append(nested_result)
+                    
+                    try:
+                        temp_path.unlink()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+            # 2. Check for ZIP archive
+            elif data.startswith(b"PK\x03\x04"):
+                try:
+                    with zipfile.ZipFile(io.BytesIO(data)) as z:
+                        for file_info in z.infolist():
+                            if file_info.file_size > 0:
+                                with z.open(file_info) as f:
+                                    file_bytes = f.read()
+                                    
+                                # If the file in ZIP is a WAV, analyze it
+                                if file_bytes.startswith(b"RIFF") and b"WAVE" in file_bytes[:20]:
+                                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+                                        tf.write(file_bytes)
+                                        tf.flush()
+                                        temp_path = Path(tf.name)
+                                        
+                                    nested_wav = WavFile(temp_path)
+                                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth)
+                                    nested_result.info["file_name"] = f"[ZIP:{file_info.filename} in {name}] {nested_result.info['file_name']}"
+                                    result.recursive_results.append(nested_result)
+                                    
+                                    try:
+                                        temp_path.unlink()
+                                    except Exception:
+                                        pass
+                except Exception:
+                    pass
+
+            # 3. Check for GZIP archive
+            elif data.startswith(b"\x1f\x8b"):
+                try:
+                    decompressed = gzip.decompress(data)
+                    if decompressed.startswith(b"RIFF") and b"WAVE" in decompressed[:20]:
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+                            tf.write(decompressed)
+                            tf.flush()
+                            temp_path = Path(tf.name)
+                            
+                        nested_wav = WavFile(temp_path)
+                        nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth)
+                        nested_result.info["file_name"] = f"[GZIP Decompressed WAV in {name}] {nested_result.info['file_name']}"
+                        result.recursive_results.append(nested_result)
+                        
+                        try:
+                            temp_path.unlink()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+    return result

@@ -13,6 +13,15 @@ from wavehunter.core.entropy import shannon_entropy
 from wavehunter.core.pipeline import run_full_analysis
 from wavehunter.core.report import generate_html_report, generate_json_report, generate_text_report
 
+# SIGINT v2.0 Visualization Imports
+from wavehunter.sigint.visualization.plots import (
+    plot_waveform,
+    plot_spectrogram,
+    plot_fft,
+    plot_entropy,
+    plot_constellation
+)
+
 from wavehunter.extractors.bitplanes import extract_bitplane
 from wavehunter.extractors.channels import extract_channels
 from wavehunter.extractors.stride import extract_strided
@@ -152,12 +161,57 @@ def analyze(
         console.print(Panel("No suspicious steganography or validated payloads found in the audio stream.", style="green"))
     else:
         console.print(findings_table)
+    console.print()
+
+    # Print SIGINT Intelligence Findings
+    if result.sigint_report:
+        sigint_rep = result.sigint_report
+        findings = sigint_rep.get("findings", [])
+        if findings:
+            sigint_table = Table(title="SIGINT Pattern Intelligence Findings", show_header=True, header_style="bold magenta")
+            sigint_table.add_column("Source", style="cyan")
+            sigint_table.add_column("Decoding Path", style="yellow")
+            sigint_table.add_column("Type", style="green")
+            sigint_table.add_column("Value", style="magenta")
+            sigint_table.add_column("Confidence", style="white")
+            
+            for f in findings[:10]:
+                sigint_table.add_row(
+                    f["source"],
+                    " -> ".join(f["path"]),
+                    f["type"],
+                    f["value"],
+                    f"{f['confidence']*100:.1f}%"
+                )
+            console.print(sigint_table)
+            console.print()
+            
+        recs = sigint_rep.get("recommendations", [])
+        if recs:
+            console.print("[bold yellow]SIGINT Engine Recommendations:[/bold yellow]")
+            for r in recs:
+                console.print(f"  [cyan]*[/cyan] {r}")
+            console.print()
+
+    # Print Recursive Forensics Findings
+    if result.recursive_results:
+        console.print("[bold green]Recursive Forensic Extraction Results:[/bold green]")
+        for idx, nested in enumerate(result.recursive_results):
+            console.print(f"  [bold yellow]Embedded Signal {idx+1}: {nested.info['file_name']}[/bold yellow]")
+            if nested.ranked:
+                console.print(f"    Top nested stego finding: [cyan]{nested.ranked[0]['name']}[/cyan] ({nested.ranked[0]['reason']})")
+                if nested.sigint_report and nested.sigint_report.get("findings"):
+                    nested_f = nested.sigint_report["findings"][0]
+                    console.print(f"    Top nested SIGINT finding: [magenta]{nested_f['type']}[/magenta] = {nested_f['value']} ({nested_f['confidence']*100:.1f}% confidence)")
+        console.print()
         
     report_kwargs = dict(
         modem_findings=result.modem_findings,
         anomalies=result.anomalies,
         signal_summary=result.signal_summary,
         extraction_log=result.extraction_log,
+        sigint_report=result.sigint_report,
+        recursive_results=result.recursive_results,
     )
 
     if txt_report:
@@ -344,6 +398,85 @@ def scan(
 
     if not (magics or regexes or comps or asciis):
         console.print("[yellow][*][/yellow] No headers, flags, or readable text patterns found.")
+
+@app.command()
+def plot(
+    file_path: Path = typer.Argument(..., help="Path to the WAV file to plot.", exists=True, dir_okay=False),
+    out_dir: Path = typer.Option(Path("./plots"), "--dir", "-d", help="Directory to save the plots.")
+):
+    """
+    Generates signal diagnostic plots (waveform, spectrogram, FFT, entropy, constellation) and saves them as images.
+    """
+    print_banner()
+    
+    console.print(f"[yellow][*][/yellow] Loading WAV file: [bold green]{file_path}[/bold green]")
+    try:
+        wav = WavFile(file_path)
+    except Exception as e:
+        console.print(f"[bold red]Error parsing WAV file: {e}[/bold red]")
+        sys.exit(1)
+        
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    console.print(f"[yellow][*][/yellow] Generating plots in [bold]{out_dir}[/bold]...")
+    
+    # 1. Waveform
+    try:
+        plot_waveform(wav.normalized_samples, wav.sample_rate, out_dir / "waveform.png")
+        console.print("[green][+][/green] Saved waveform.png")
+    except Exception as e:
+        console.print(f"[red][!][/red] Waveform plot failed: {e}")
+        
+    # 2. Spectrogram
+    try:
+        plot_spectrogram(wav.normalized_samples, wav.sample_rate, out_dir / "spectrogram.png")
+        console.print("[green][+][/green] Saved spectrogram.png")
+    except Exception as e:
+        console.print(f"[red][!][/red] Spectrogram plot failed: {e}")
+        
+    # 3. FFT
+    try:
+        plot_fft(wav.normalized_samples, wav.sample_rate, out_dir / "fft.png")
+        console.print("[green][+][/green] Saved fft.png")
+    except Exception as e:
+        console.print(f"[red][!][/red] FFT plot failed: {e}")
+        
+    # 4. Entropy
+    try:
+        plot_entropy(wav.raw_data_bytes, out_dir / "entropy.png")
+        console.print("[green][+][/green] Saved entropy.png")
+    except Exception as e:
+        console.print(f"[red][!][/red] Entropy plot failed: {e}")
+        
+    # 5. Constellation
+    try:
+        # Auto-detect carrier and baud rate from SIGINT coordinator if not specified
+        from wavehunter.sigint.heuristics.coordinator import coordinate_sigint_analysis
+        rep = coordinate_sigint_analysis(wav.normalized_samples, wav.sample_rate)
+        
+        carrier_hz = None
+        symbol_rate = None
+        
+        carriers = rep.get("carriers", {}).get("carrier_candidates", [])
+        if carriers:
+            carrier_hz = carriers[0]["frequency_hz"]
+            
+        mods = rep.get("modulations", [])
+        if mods:
+            # Estimate symbol rate
+            from wavehunter.sigint.demodulation.synchronization import estimate_symbol_rate
+            mono = wav.normalized_samples[:, 0] if len(wav.normalized_samples.shape) > 1 else wav.normalized_samples
+            symbol_rate = estimate_symbol_rate(mono, wav.sample_rate)
+            
+        if carrier_hz and symbol_rate:
+            plot_constellation(wav.normalized_samples, wav.sample_rate, carrier_hz, symbol_rate, out_dir / "constellation.png")
+            console.print(f"[green][+][/green] Saved constellation.png (Carrier: {carrier_hz:.1f} Hz, Symbol Rate: {symbol_rate:.1f} Baud)")
+        else:
+            console.print("[yellow][*][/yellow] Could not auto-detect carrier or symbol rate; skipping constellation plot.")
+    except Exception as e:
+        console.print(f"[red][!][/red] Constellation plot failed: {e}")
+        
+    console.print(f"[green][+][/green] Plot generation complete. View all plots under [bold]{out_dir}[/bold]")
 
 if __name__ == "__main__":
     app()
