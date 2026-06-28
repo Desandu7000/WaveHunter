@@ -14,6 +14,8 @@ import re
 import struct
 import sys
 import zlib
+import os
+import json
 
 sys.path.insert(0, ".")
 from wavehunter.core.audio import WavFile

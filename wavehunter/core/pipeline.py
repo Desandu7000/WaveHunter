@@ -43,6 +43,9 @@ from wavehunter.extractors.printable import extract_printable_text
 from wavehunter.extractors.relationships import extract_relationships
 from wavehunter.extractors.reverse import extract_reversed
 from wavehunter.extractors.stride import extract_strided
+from wavehunter.extractors.wavelet import extract_dwt_lsb
+from wavehunter.extractors.parity import extract_sample_parity
+from wavehunter.extractors.spread_spectrum import extract_dsss
 
 # SIGINT v2.0 Imports
 from wavehunter.sigint.heuristics.coordinator import coordinate_sigint_analysis
@@ -95,6 +98,9 @@ def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[st
         ("delta", extract_delta, (samples, bps)),
         ("phase_fft", extract_phase, (wav.normalized_samples,)),
         ("printable", extract_printable_text, (samples, bps)),
+        ("dwt_lsb", extract_dwt_lsb, (samples, bps)),
+        ("sample_parity", extract_sample_parity, (samples, bps)),
+        ("dsss", extract_dsss, (samples, bps)),
     ]
 
     for name, fn, args in extractors:
@@ -288,6 +294,20 @@ def run_full_analysis(
                             temp_path.unlink()
                         except Exception:
                             pass
+                except Exception:
+                    pass
+
+            # 4. Check for Base64 encoding
+            import re
+            import base64
+            # Look for base64 strings longer than 40 chars
+            b64_matches = re.finditer(br'(?:[A-Za-z0-9+/]{4}){10,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?', data)
+            for m in b64_matches:
+                try:
+                    decoded = base64.b64decode(m.group(0))
+                    if b"ANIMUS{" in decoded:
+                        dummy = AnalysisResult(info={"file_name": f"[Base64 decoded in {name}]"}, candidates=[{"name": "Base64 Flag", "source": "base64", "data": decoded}])
+                        result.recursive_results.append(dummy)
                 except Exception:
                     pass
 
