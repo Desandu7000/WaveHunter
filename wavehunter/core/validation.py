@@ -5,6 +5,7 @@ Magic-byte matches alone are not trusted — each format is verified structurall
 from __future__ import annotations
 
 import gzip
+import io
 import struct
 import zipfile
 from typing import Tuple
