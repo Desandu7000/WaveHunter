@@ -57,13 +57,23 @@ BANNER = f"""[bold blue]
 def print_banner():
     console.print(BANNER)
 
+@app.callback(invoke_without_command=True)
+def _banner_callback(ctx: typer.Context):
+    """Prints the WaveHunter banner on every invocation, including --help."""
+    print_banner()
+    if ctx.invoked_subcommand is None:
+        # No subcommand given — print help text
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
 @app.command()
 def analyze(
     file_path: Path = typer.Argument(..., help="Path to the audio file to analyze.", exists=True, dir_okay=False),
     html_report: Optional[Path] = typer.Option(None, "--html", "-o", help="Path to save the HTML dashboard report."),
     json_report: Optional[Path] = typer.Option(None, "--json", "-j", help="Path to save the JSON data report."),
     txt_report: Optional[Path] = typer.Option(None, "--txt", "-t", help="Path to save the text report."),
-    flag_format: Optional[str] = typer.Option(None, "--flag-format", "-f", help="Custom flag format pattern to search for (e.g. 'D7CTF', 'FLAG').")
+    flag_format: Optional[str] = typer.Option(None, "--flag-format", "-f", help="Custom flag format pattern to search for (e.g. 'D7CTF', 'FLAG')."),
+    thorough: bool = typer.Option(False, "--thorough", "-T", help="Enable exhaustive analysis: tests all stride offsets and scores every candidate. Much slower but more thorough. Default is fast mode.")
 ):
     """
     Performs a full forensic analysis scan on an audio file.
@@ -73,9 +83,11 @@ def analyze(
     data streams using various audio steganography extractors, and runs regex/signature 
     scanners to detect embedded flags, files, or text. Finally, it generates requested 
     reports (Rich terminal, HTML, JSON, or TXT).
+
+    By default, runs in fast mode: limits stride offset permutations and applies a
+    pre-filter before scoring to skip noise streams. Use --thorough for a fully
+    exhaustive scan (may take significantly longer on large files).
     """
-    print_banner()
-    
     console.print(f"[yellow][*][/yellow] Loading audio file: [bold green]{file_path}[/bold green]")
     try:
         wav = WavFile(file_path)
@@ -100,13 +112,18 @@ def analyze(
     
     console.print(table)
     
+    if thorough:
+        console.print("[bold yellow][!] Thorough mode enabled — this will be significantly slower on large files.[/bold yellow]")
+    else:
+        console.print("[dim][*] Running in fast mode. Use --thorough for an exhaustive scan.[/dim]")
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console
     ) as progress:
         task = progress.add_task("[cyan]Running full forensic analysis pipeline...", total=1)
-        result = run_full_analysis(wav, flag_format=flag_format)
+        result = run_full_analysis(wav, flag_format=flag_format, thorough=thorough)
         progress.update(task, completed=1)
 
     ranked = result.ranked

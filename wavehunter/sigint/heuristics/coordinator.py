@@ -24,22 +24,34 @@ def coordinate_sigint_analysis(
     flag_format: str | None = None
 ) -> Dict[str, Any]:
     """
-    Heuristic coordination engine that runs signal fingerprinting, 
+    Heuristic coordination engine that runs signal fingerprinting,
     modulation detection, demodulation, multi-stage decoding, and pattern intelligence.
+
+    For files with sample rates above 22,050 Hz (e.g. 44.1kHz/48kHz), the input is
+    downsampled by 2x before STFT-based analysis. This halves the computation without
+    affecting detection quality for typical CTF radio signals (which are <10kHz bandwidth).
     """
     if len(samples) == 0:
         return {}
-        
-    mono_samples = samples[:, 0] if len(samples.shape) > 1 else samples
-    
+
+    # Downsample high sample-rate audio for faster SIGINT analysis.
+    # CTF carrier signals are rarely above 10kHz, so a 22050Hz Nyquist rate is sufficient.
+    analysis_samples = samples
+    analysis_rate = sample_rate
+    if sample_rate > 22050:
+        analysis_samples = samples[::2]
+        analysis_rate = sample_rate // 2
+
+    mono_samples = analysis_samples[:, 0] if len(analysis_samples.shape) > 1 else analysis_samples
+
     # 1. Fingerprint signal
-    fingerprint = fingerprint_signal(samples, sample_rate)
-    
+    fingerprint = fingerprint_signal(analysis_samples, analysis_rate)
+
     # 2. Carriers & Sweeps
-    carriers = analyze_carriers_and_signals(samples, sample_rate)
-    
+    carriers = analyze_carriers_and_signals(analysis_samples, analysis_rate)
+
     # 3. Modulation Detections
-    modulations = scan_digital_modulations(samples, sample_rate)
+    modulations = scan_digital_modulations(analysis_samples, analysis_rate)
     
     # 4. Attempt Demodulations & Decodings on active carriers
     demod_candidates = []

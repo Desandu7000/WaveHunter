@@ -74,7 +74,7 @@ def _run_extractor(name: str, fn, *args, log: List[str]) -> List[Dict[str, Any]]
     log.append(f"{name}: {len(results)} candidates")
     return results
 
-def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[str]]:
+def run_extraction_pipeline(wav: WavFile, thorough: bool = False) -> tuple[List[Dict[str, Any]], List[str]]:
     """
     Runs all steganography extractors and returns raw candidates + extraction log.
     
@@ -82,6 +82,9 @@ def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[st
     methods (e.g., bitplanes, interleaved streams, strides, Gray code, Delta encoding, 
     FFT phase, polarity-inversion LSB, stereo phase-difference LSB, discrete wavelet 
     transform, and direct sequence spread spectrum) to collect raw data candidates.
+
+    Pass thorough=True to enable exhaustive stride offset permutations (much slower but
+    leaves no stone unturned).
     """
     candidates: List[Dict[str, Any]] = []
     log: List[str] = []
@@ -93,7 +96,8 @@ def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[st
         ("relationships", extract_relationships, (samples, bps)),
         ("channels", extract_channels, (samples, bps)),
         ("interleaved", extract_interleaved, (samples, bps)),
-        ("strided", extract_strided, (samples, bps)),
+        # stride extractor respects thorough flag for offset coverage
+        ("strided", lambda s, b: extract_strided(s, b, thorough=thorough), (samples, bps)),
         ("reversed", extract_reversed, (samples, bps)),
         ("nibbles", extract_nibbles, (samples, bps)),
         ("reconstructed_bytes", extract_reconstructed_bytes, (samples, bps)),
@@ -166,7 +170,8 @@ def run_full_analysis(
     wav: WavFile, 
     depth: int = 0, 
     max_depth: int = 2,
-    flag_format: Optional[str] = None
+    flag_format: Optional[str] = None,
+    thorough: bool = False
 ) -> AnalysisResult:
     """
     Executes the complete WaveHunter forensic analysis pipeline with recursive processing.
@@ -177,8 +182,11 @@ def run_full_analysis(
     3. Profiles and scores candidate data streams to rank them by likelihood of being a payload.
     4. Computes digital signal characteristics, statistical carrier anomalies, and modulations.
     5. Returns an AnalysisResult aggregating all findings.
+
+    Pass thorough=True to enable exhaustive analysis (all stride offsets, full scoring of every
+    candidate). Slower but leaves nothing untested.
     """
-    candidates, extraction_log = run_extraction_pipeline(wav)
+    candidates, extraction_log = run_extraction_pipeline(wav, thorough=thorough)
     
     # Run decoder pipeline on all candidates to uncover hidden/encrypted layers
     from wavehunter.sigint.decoders.pipeline import run_decoder_pipeline
@@ -204,7 +212,7 @@ def run_full_analysis(
                     })
                     
     candidates.extend(decoded_candidates)
-    ranked = rank_candidates(candidates)
+    ranked = rank_candidates(candidates, thorough=thorough)
 
     # Map source -> raw data for statistical profiling (ranked results omit data)
     data_by_source = {c["source"]: c["data"] for c in candidates}
@@ -278,7 +286,7 @@ def run_full_analysis(
                         temp_path = Path(tf.name)
                         
                     nested_wav = WavFile(temp_path)
-                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format)
+                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format, thorough=thorough)
                     nested_result.info["file_name"] = f"[Embedded WAV in {name}] {nested_result.info['file_name']}"
                     result.recursive_results.append(nested_result)
                     
@@ -306,7 +314,7 @@ def run_full_analysis(
                                         temp_path = Path(tf.name)
                                         
                                     nested_wav = WavFile(temp_path)
-                                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format)
+                                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format, thorough=thorough)
                                     nested_result.info["file_name"] = f"[ZIP:{file_info.filename} in {name}] {nested_result.info['file_name']}"
                                     result.recursive_results.append(nested_result)
                                     
@@ -328,7 +336,7 @@ def run_full_analysis(
                             temp_path = Path(tf.name)
                             
                         nested_wav = WavFile(temp_path)
-                        nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format)
+                        nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format, thorough=thorough)
                         nested_result.info["file_name"] = f"[GZIP Decompressed WAV in {name}] {nested_result.info['file_name']}"
                         result.recursive_results.append(nested_result)
                         

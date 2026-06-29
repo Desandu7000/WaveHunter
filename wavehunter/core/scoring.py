@@ -8,6 +8,43 @@ from wavehunter.core.utils import format_bytes
 from wavehunter.core.validation import validate_embedded_file
 from wavehunter.core.stats import compute_printable_ratio
 
+
+def _fast_prefilter(data: bytes) -> bool:
+    """
+    Cheap pre-filter to decide if a candidate stream is worth full scoring.
+
+    Returns True if the candidate passes (worth scoring), False if it's almost certainly noise.
+    Avoids running heavy regex, magic, and ASCII scanners on thousands of noise streams by only
+    inspecting entropy and a quick 512-byte preview scan.
+    """
+    if not data or len(data) < 4:
+        return False
+
+    # Quick entropy check: if entropy is mid-range, content may be structured
+    ent = shannon_entropy(data)
+
+    # Very high entropy (>= 7.95) -> possible encrypted/random data
+    if ent >= 7.95:
+        return True
+
+    # Very low entropy (< 0.5) -> constant/padding stream -> skip
+    if ent < 0.5:
+        return False
+
+    # Quick printable check on first 512 bytes only (cheap)
+    preview = data[:512]
+    printable_count = sum(1 for b in preview if 32 <= b <= 126)
+    if printable_count / len(preview) >= 0.1:
+        return True
+
+    # Quick regex scan on first 512 bytes (catches flags early)
+    quick_matches = scan_regex(preview)
+    if quick_matches:
+        return True
+
+    return False
+
+
 def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
     """
     Analyzes a candidate byte stream using all scanners, computes entropy,
@@ -150,15 +187,26 @@ def score_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "preview_ascii": "".join(chr(b) if 32 <= b <= 126 else "." for b in preview)
     }
 
-def rank_candidates(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+
+def rank_candidates(candidates: List[Dict[str, Any]], thorough: bool = False) -> List[Dict[str, Any]]:
     """
     Scores all candidates, filters out uninteresting ones (rating 1 with low entropy),
     and sorts them so the highest rated candidates appear first.
+
+    In default (fast) mode, a cheap pre-filter is applied before full scoring to skip
+    obvious noise streams. Pass thorough=True to score every candidate fully.
     """
     scored = []
     for c in candidates:
+        # Always score trailer payloads fully — they are always worth inspecting
+        is_trailer = "trailer" in c.get("source", "")
+        if not thorough and not is_trailer:
+            # Fast pre-filter: skip candidates that are clearly noise
+            if not _fast_prefilter(c.get("data", b"")):
+                continue
+
         res = score_candidate(c)
-        if res["rating"] > 1 or res["entropy"] > 7.5 or "trailer" in res["source"]:
+        if res["rating"] > 1 or res["entropy"] > 7.5 or is_trailer:
             scored.append(res)
             
     scored.sort(key=lambda x: (-x["rating"], -x["entropy"]))
