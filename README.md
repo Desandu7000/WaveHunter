@@ -1,5 +1,7 @@
 # WaveHunter
 
+<img width="1075" height="728" alt="Screenshot 2026-06-29 203028" src="https://github.com/user-attachments/assets/41567f86-1fbf-4507-bb03-1d84874b3273" />
+
 **WaveHunter** is an open-source Python toolkit for audio forensics, steganography, CTFs, malware analysis, and reverse engineering. Designed as a professional, modular, GitHub-ready command-line tool, it functions as the **"Binwalk for audio"**—automatically parsing audio streams, extracting hidden payloads, and ranking potential data candidates.
 
 Created and maintained by **Desandu Hettiarachchi**.
