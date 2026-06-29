@@ -75,7 +75,14 @@ def _run_extractor(name: str, fn, *args, log: List[str]) -> List[Dict[str, Any]]
     return results
 
 def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[str]]:
-    """Run all steganography extractors and return raw candidates + extraction log."""
+    """
+    Runs all steganography extractors and returns raw candidates + extraction log.
+    
+    This function coordinates all active digital audio steganography extraction 
+    methods (e.g., bitplanes, interleaved streams, strides, Gray code, Delta encoding, 
+    FFT phase, polarity-inversion LSB, stereo phase-difference LSB, discrete wavelet 
+    transform, and direct sequence spread spectrum) to collect raw data candidates.
+    """
     candidates: List[Dict[str, Any]] = []
     log: List[str] = []
     samples = wav.raw_samples
@@ -161,7 +168,16 @@ def run_full_analysis(
     max_depth: int = 2,
     flag_format: Optional[str] = None
 ) -> AnalysisResult:
-    """Execute the complete WaveHunter forensic analysis pipeline with recursive processing."""
+    """
+    Executes the complete WaveHunter forensic analysis pipeline with recursive processing.
+    
+    This is the core analysis orchestrator. It:
+    1. Runs all extraction sub-modules on the input audio file to collect candidate byte streams.
+    2. Runs the decoder pipeline recursively to uncover nested, hidden, or encrypted data layers.
+    3. Profiles and scores candidate data streams to rank them by likelihood of being a payload.
+    4. Computes digital signal characteristics, statistical carrier anomalies, and modulations.
+    5. Returns an AnalysisResult aggregating all findings.
+    """
     candidates, extraction_log = run_extraction_pipeline(wav)
     
     # Run decoder pipeline on all candidates to uncover hidden/encrypted layers

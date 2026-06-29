@@ -106,33 +106,33 @@ def test_demodulators():
 
 def test_decoders():
     # Test individual decoders
-    assert decode_base64(b"YW5pbXVz") == b"animus"
-    assert decode_base16(b"616e696d7573") == b"animus"
-    assert decode_rot(b"navzhf", 13) == b"animus"
-    assert decode_xor_single(b"\x00\x0f\x08\x0c\x14\x12", 0x61) == b"animus"
+    assert decode_base64(b"ZDdjdGY=") == b"d7ctf"
+    assert decode_base16(b"6437637466") == b"d7ctf"
+    assert decode_rot(b"q7pgs", 13) == b"d7ctf"
+    assert decode_xor_single(b"\x05\x56\x02\x15\x07", 0x61) == b"d7ctf"
     
     # Test recursive decoder pipeline
-    # nested: "ANIMUS{flag}" -> ROT13 ("NAVZHF{synt}") -> B64 ("TkFWWkhGe3N5bnR9")
-    original = b"TkFWWkhGe3N5bnR9"
+    # nested: "D7CTF{flag}" -> ROT13 ("Q7PGS{synt}") -> B64 ("UTdQR1N7c3ludH0=")
+    original = b"UTdQR1N7c3ludH0="
     results = run_decoder_pipeline(original)
     
     decoded_values = [r["data"] for r in results]
-    assert b"ANIMUS{flag}" in decoded_values
+    assert b"D7CTF{flag}" in decoded_values
     
     # Verify that the path to success was captured
     path_found = False
     for r in results:
-        if r["data"] == b"ANIMUS{flag}" and "base64" in r["path"] and "caesar_s13" in r["path"]:
+        if r["data"] == b"D7CTF{flag}" and "base64" in r["path"] and "caesar_s13" in r["path"]:
             path_found = True
             break
     assert path_found is True
-
+ 
 def test_pattern_intelligence():
-    data = b"Some filler data animus{f0r3ns1cs_is_fun} more filler"
-    findings = scan_intelligence_patterns(data, flag_format="animus")
+    data = b"Some filler data d7ctf{f0r3ns1cs_is_fun} more filler"
+    findings = scan_intelligence_patterns(data, flag_format="d7ctf")
     assert len(findings) > 0
-    assert findings[0]["type"] == "Specific Flag (ANIMUS)"
-    assert findings[0]["value"] == "animus{f0r3ns1cs_is_fun}"
+    assert findings[0]["type"] == "Specific Flag (D7CTF)"
+    assert findings[0]["value"] == "d7ctf{f0r3ns1cs_is_fun}"
 
 def test_reconstruction():
     stereo_samples = np.array([[1.0, -1.0], [2.0, -2.0], [3.0, -3.0]], dtype=np.float32)

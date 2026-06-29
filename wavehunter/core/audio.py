@@ -32,6 +32,11 @@ class WavFile:
         self._parse()
 
     def _parse(self):
+        """
+        Parses the binary structure of the audio file.
+        Attempts to read RIFF/WAV chunks first. If the file is not a WAV, 
+        falls back to decoding via the 'soundfile' library.
+        """
         with open(self.file_path, "rb") as f:
             file_bytes = f.read()
 
@@ -162,6 +167,10 @@ class WavFile:
                 raise ValueError(f"Failed to parse audio file with WAV parser and soundfile fallback: {e}")
 
     def _parse_fmt_chunk(self, data: bytes):
+        """
+        Parses the 'fmt ' subchunk of a WAV file to retrieve sample rate,
+        bit depth, channels, block alignment, and encoding format.
+        """
         if len(data) < 16:
             raise ValueError("fmt chunk is too short.")
         
@@ -174,6 +183,10 @@ class WavFile:
         self.bits_per_sample = fmt_data[5]
 
     def _parse_list_chunk(self, data: bytes):
+        """
+        Parses 'LIST' chunks containing 'INFO' subchunks to extract 
+        standard tags and metadata (such as author, title, creation date).
+        """
         if len(data) < 4:
             return
         
@@ -196,6 +209,11 @@ class WavFile:
                 offset = sub_end
 
     def _decode_samples(self):
+        """
+        Decodes the raw binary data subchunk bytes into numpy arrays.
+        Supports 8-bit unsigned PCM, 16/24/32-bit signed PCM, and 32/64-bit IEEE float formats.
+        Normalizes samples to the range [-1.0, 1.0].
+        """
         bytes_per_sample = self.bits_per_sample // 8
         if bytes_per_sample == 0:
             return

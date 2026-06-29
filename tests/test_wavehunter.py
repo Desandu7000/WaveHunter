@@ -113,7 +113,7 @@ def test_gray_and_delta():
 
 
 def test_stream_statistics():
-    text = b"ANIMUS{test_flag}" + b"\x00" * 100
+    text = b"D7CTF{test_flag}" + b"\x00" * 100
     stats = analyze_stream_statistics(text)
     assert stats["printable_ratio"] > 0.1
     assert stats["entropy"] < 8.0

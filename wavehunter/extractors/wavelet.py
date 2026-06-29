@@ -6,7 +6,14 @@ from wavehunter.core.utils import bits_to_bytes
 def extract_dwt_lsb(samples: np.ndarray, bits_per_sample: int) -> List[Dict[str, Any]]:
     """
     Extracts LSBs from the Discrete Wavelet Transform (DWT) coefficients.
-    This simulates 'Layered' drops by pulling from specific frequency subbands.
+    
+    Discrete Wavelet Transform (DWT) decomposes a signal into frequency subbands 
+    (approximation/low-frequency cA, and detail/high-frequency cD coefficients). 
+    Advanced steganography algorithms embed data in the LSB of these wavelets to 
+    minimize audible distortion.
+    
+    This function decomposes the audio channel using Haar wavelets (db1) to 8 levels, 
+    rounds the coefficients to integers, and extracts LSBs from each frequency band.
     """
     candidates = []
     

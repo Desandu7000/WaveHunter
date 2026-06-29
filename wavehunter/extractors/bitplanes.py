@@ -10,7 +10,13 @@ def extract_bitplane(raw_samples: np.ndarray,
     """
     Extracts the bit at bit_position from the specified channel of raw_samples.
     Packs the bits into bytes.
-    - pack_msb: If True, the first sample's bit is placed in the MSB (bit 7) of the output byte.
+    
+    Steganography often hides data in the Least Significant Bits (LSB, bit_position=0) 
+    of audio samples. This function extracts that bit layer across all samples and packs 
+    8 consecutive bits into a single byte.
+    
+    - pack_msb: If True, the first sample's bit is placed in the MSB (bit 7) of the output byte (standard big-endian bit packing).
+                If False, the first sample's bit is placed in the LSB (bit 0) of the output byte (little-endian bit packing).
     """
     if channel >= raw_samples.shape[1]:
         raise ValueError(f"Channel index {channel} out of range (total channels: {raw_samples.shape[1]})")
@@ -36,6 +42,10 @@ def extract_all_bitplanes(raw_samples: np.ndarray,
     """
     Extracts all bitplanes for all channels, returning both MSB and LSB packed versions.
     Yields list of candidate dicts.
+    
+    Loops through all channels and low-order bitplanes (bits 0 to 4), extracting both 
+    MSB-packed and LSB-packed variants. Higher bitplanes (above bit 4) are typically 
+    skipped as hiding data in those layers causes audible distortion (white noise).
     """
     candidates = []
     n_channels = raw_samples.shape[1]

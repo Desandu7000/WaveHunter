@@ -63,11 +63,16 @@ def analyze(
     html_report: Optional[Path] = typer.Option(None, "--html", "-o", help="Path to save the HTML dashboard report."),
     json_report: Optional[Path] = typer.Option(None, "--json", "-j", help="Path to save the JSON data report."),
     txt_report: Optional[Path] = typer.Option(None, "--txt", "-t", help="Path to save the text report."),
-    flag_format: Optional[str] = typer.Option(None, "--flag-format", "-f", help="Custom flag format pattern to search for (e.g. 'FLAG', 'ANIMUS').")
+    flag_format: Optional[str] = typer.Option(None, "--flag-format", "-f", help="Custom flag format pattern to search for (e.g. 'D7CTF', 'FLAG').")
 ):
     """
     Performs a full forensic analysis scan on an audio file.
-    Applies all extractors and scanners, ranks candidates, and generates reports.
+    
+    This command automatically loads the audio file (supporting WAV, and falling back to 
+    other formats like MP3/FLAC if soundfile is installed), extracts hidden candidate 
+    data streams using various audio steganography extractors, and runs regex/signature 
+    scanners to detect embedded flags, files, or text. Finally, it generates requested 
+    reports (Rich terminal, HTML, JSON, or TXT).
     """
     print_banner()
     
@@ -247,6 +252,10 @@ def extract(
 ):
     """
     Extracts a specific raw binary byte stream from the audio file and saves it.
+    
+    This command lets you manually target a specific steganographic extraction method 
+    (such as LSB/MSB bitplanes, individual channels, reversed streams, gray code, 
+    delta decoding, or phase analysis) and save the recovered binary payload to a file.
     """
     print_banner()
     
@@ -331,6 +340,10 @@ def scan(
 ):
     """
     Scans a raw binary file for signs of hidden payloads (signatures, flags, text).
+    
+    This is useful for analyzing raw data streams extracted using the 'extract' command. 
+    It checks for known file magic signatures (like PK/ZIP, PNG, ELF), matches custom flag 
+    regex patterns, attempts decompression, and dumps readable ASCII strings.
     """
     print_banner()
     
@@ -409,7 +422,11 @@ def plot(
     out_dir: Path = typer.Option(Path("./plots"), "--dir", "-d", help="Directory to save the plots.")
 ):
     """
-    Generates signal diagnostic plots (waveform, spectrogram, FFT, entropy, constellation) and saves them as images.
+    Generates signal diagnostic plots and saves them as images.
+    
+    Creates visual analysis assets (waveform.png, spectrogram.png, fft.png, entropy.png, 
+    and constellation.png) under the specified output directory. These plots help identify 
+    suspicious visual anomalies or digital modulation carriers in the audio signal.
     """
     print_banner()
     

@@ -6,8 +6,14 @@ from wavehunter.core.utils import bits_to_bytes
 def extract_dsss(samples: np.ndarray, bits_per_sample: int) -> List[Dict[str, Any]]:
     """
     Extracts Direct Sequence Spread Spectrum (DSSS) encoded payloads.
-    It attempts to despread the signal using common CTF PRNG seeds and chipping sequences.
-    We test both XORing against the LSB plane and multiplying against the raw signal.
+    
+    Direct Sequence Spread Spectrum (DSSS) is a modulation technique that spreads a 
+    narrowband signal over a wider bandwidth using a pseudo-random noise (PN) sequence. 
+    In CTF/audio steganography, this is often simulated by XORing the LSB bitplane 
+    with a pseudo-random sequence generated from a standard PRNG seed (e.g. Python's `random`).
+    
+    This function attempts to despread the LSB bitplane by re-generating matching PN 
+    sequences from common seeds and XORing them back.
     """
     candidates = []
     
