@@ -46,9 +46,11 @@ pip install -e .
 WaveHunter is invoked via the CLI:
 
 ### 1. Analyze an Audio File
-Runs the full suite of extractors, scanners, and entropy checks, scoring candidate streams and generating reports. You can also specify a custom flag format (e.g. `HTB`, `ANIMUS`, `FLAG`):
+Runs the full suite of extractors, scanners, and entropy checks, scoring candidate streams and generating reports. You can also specify a custom flag format (e.g. `D7CTF`, `HTB`, `FLAG`).
+
+For example, if you want to scan for flags matching the format `D7CTF{1337_F0UND}`, you should pass `D7CTF` as the flag format:
 ```bash
-wavehunter analyze sample.wav --html report.html --json report.json --flag-format HTB
+wavehunter analyze sample.wav --html report.html --json report.json --flag-format D7CTF
 ```
 
 ### 2. Extract Specific Streams
@@ -58,9 +60,11 @@ wavehunter extract sample.wav bitplane --channel 0 --bit 0 --out output.bin
 ```
 
 ### 3. Scan a Stream File
-Scan raw binary files for flags, magic headers, or ASCII strings (supports custom flag format):
+Scan raw binary files for flags, magic headers, or ASCII strings.
+
+For example, to scan a file for custom flag formats matching `D7CTF{...}`:
 ```bash
-wavehunter scan output.bin --flag-format HTB
+wavehunter scan output.bin --flag-format D7CTF
 ```
 
 ---
