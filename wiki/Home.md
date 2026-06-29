@@ -12,36 +12,45 @@ WaveHunter processes audio files through a modular multi-stage pipeline:
 
 ```mermaid
 graph TD
-    A[Input WAV File] --> B[Custom WAV RIFF Parser]
-    B --> C[Metadata & Trailer Detection]
-    B --> D[Signal Characteristics & Entropy Analysis]
+    A["Input WAV File"] --> B["Custom WAV RIFF Parser"]
+    B --> C["Metadata & Trailer Detection"]
+    B --> D["Signal Characteristics & Entropy Analysis"]
     
-    D --> E[Forensic Extraction Pipeline]
-    D --> F[SIGINT Analysis Engine]
+    D --> E["Forensic Extraction Pipeline"]
+    D --> F["SIGINT Analysis Engine"]
     
-    E --> E1[Bitplanes & Multibit]
-    E --> E2[Strides & Reversals]
-    E --> E3[Gray Code & Delta]
-    E --> E4[Wavelet & Phase]
+    E --> E1["Bitplanes & Multibit"]
+    E --> E2["Strides & Reversals"]
+    E --> E3["Gray Code & Delta"]
+    E --> E4["Wavelet & Phase"]
     
-    F --> F1[Carrier Detection]
-    F --> F2[Baud/Symbol Sync]
-    F --> F3[Demodulators (FSK, ASK, BPSK, etc.)]
-    F --> F4[Recursive Signal Decoding]
+    F --> F1["Carrier Detection"]
+    F --> F2["Baud/Symbol Sync"]
+    F --> F3["Demodulators (FSK, ASK, BPSK, etc.)"]
+    F --> F4["Recursive Signal Decoding"]
     
-    E1 & E2 & E3 & E4 & F3 & F4 --> G[Data Scanners]
+    E1 --> G["Data Scanners"]
+    E2 --> G
+    E3 --> G
+    E4 --> G
+    F3 --> G
+    F4 --> G
     
-    G --> G1[Magic Signatures]
-    G --> G2[Regex & Flags]
-    G --> G3[ASCII & Printable Strings]
-    G --> G4[Compression Decompressors]
+    G --> G1["Magic Signatures"]
+    G --> G2["Regex & Flags"]
+    G --> G3["ASCII & Printable Strings"]
+    G --> G4["Compression Decompressors"]
     
-    G1 & G2 & G3 & G4 --> H[Confidence Scoring Engine]
-    H --> I[Reports & Dashboards]
-    I --> I1[Rich Terminal Table]
-    I --> I2[JSON Report]
-    I --> I3[HTML Dark-Mode Dashboard]
-    I --> I4[Diagnostic Signal Plots]
+    G1 --> H["Confidence Scoring Engine"]
+    G2 --> H
+    G3 --> H
+    G4 --> H
+    
+    H --> I["Reports & Dashboards"]
+    I --> I1["Rich Terminal Table"]
+    I --> I2["JSON Report"]
+    I --> I3["HTML Dark-Mode Dashboard"]
+    I --> I4["Diagnostic Signal Plots"]
 ```
 
 ---

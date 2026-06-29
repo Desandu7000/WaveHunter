@@ -49,14 +49,18 @@ Demodulated bitstreams are passed to a recursive decoder that attempts up to 3+ 
 
 ```mermaid
 graph TD
-    A[Demodulated Bytes] --> B{Decoder Pipeline}
-    B -->|Base Decoders| B1[Base64 / Base32 / Base16 / Base85 / Base58]
-    B -->|Text Protocols| B2[URL Decode / HTML Entity Decode]
-    B -->|Line Encodings| B3[Gray Code Decoder]
-    B -->|Cipher Decoders| B4[Caesar Rotations / Single-byte XOR Brute Force]
-    B -->|Keyed Ciphers| B5[Vigenere / RC4 Decryption]
+    A["Demodulated Bytes"] --> B{"Decoder Pipeline"}
+    B -->|Base Decoders| B1["Base64 / Base32 / Base16 / Base85 / Base58"]
+    B -->|Text Protocols| B2["URL Decode / HTML Entity Decode"]
+    B -->|Line Encodings| B3["Gray Code Decoder"]
+    B -->|Cipher Decoders| B4["Caesar Rotations / Single-byte XOR Brute Force"]
+    B -->|Keyed Ciphers| B5["Vigenere / RC4 Decryption"]
     
-    B1 & B2 & B3 & B4 & B5 --> C[Evaluate Candidate Shannon Entropy & Printability]
+    B1 --> C["Evaluate Candidate Shannon Entropy & Printability"]
+    B2 --> C
+    B3 --> C
+    B4 --> C
+    B5 --> C
     C -->|Recursive Step| B
 ```
 
