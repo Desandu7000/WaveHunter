@@ -36,7 +36,7 @@ Multi-channel audio files (such as stereo files) store samples alternately (inte
 ## 3. Gray Code & Delta Decoding
 Some steganography tools apply simple sample-value transformations before embedding to make changes less audible or harder to scan.
 
-* **Gray Code**: Converts Gray-encoded samples back to binary ($B_i = B_{i+1} \oplus G_i$) before extracting bitplanes.
+* **Gray Code**: Converts Gray-encoded samples back to binary ($B[i] = B[i+1] \oplus G[i]$) before extracting bitplanes.
 * **Delta (Differential) Decoding**: Decodes differential amplitude encoding. It reconstructs the sequence using:
   $$s[n] = (raw[n] - raw[n-1]) \pmod{2^{\text{bit-depth}}}$$
 

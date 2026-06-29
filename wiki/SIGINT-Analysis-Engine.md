@@ -37,7 +37,7 @@ Once parameters are locked, WaveHunter routes the samples to a dedicated demodul
 
 * **FSK Demodulator**: Compares DFT/Goertzel filter energy at the mark and space frequencies over each symbol period to yield a bitstream.
 * **ASK Demodulator**: Applique clock recovery and thresholds the amplitude envelope against the mean envelope level.
-* **BPSK Demodulator**: Computes the carrier's phase angle $\theta = \angle X(f_c)$ for each symbol and applies differential decoding:
+* **BPSK Demodulator**: Computes the carrier's phase angle $\theta = \angle X(f)$ for each symbol and applies differential decoding:
   $$\Delta \theta = \theta[n] - \theta[n-1]$$
   If $|\Delta \theta| > \pi/2$, it outputs a `1`, otherwise `0`.
 * **Morse & DTMF Decoders**: Parse sequences of tones and silences, mapping DTMF grid pairs (e.g. 941 Hz + 1336 Hz = `#`) and Morse intervals directly to ASCII.
@@ -70,7 +70,7 @@ graph TD
 
 ## 6. Constellation Plotting
 Using the `plot` command, you can generate IQ constellation diagrams:
-* The signal is mixed with complex carrier references: $I[t] = s[t] \cos(2\pi f_c t)$ and $Q[t] = -s[t] \sin(2\pi f_c t)$.
+* The signal is mixed with complex carrier references: $I[t] = s[t] \cos(2\pi f t)$ and $Q[t] = -s[t] \sin(2\pi f t)$.
 * Lowpass filtered to isolate the baseband.
 * Sampled at the recovered symbol clock points.
 * Plotted in the complex plane ($I$ vs. $Q$) to visually confirm carrier phases (e.g. two distinct clusters for BPSK).
