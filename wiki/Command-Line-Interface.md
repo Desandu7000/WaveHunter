@@ -27,7 +27,7 @@ wavehunter analyze FILE_PATH [OPTIONS]
 * `--html`, `-o` `PATH`: Saves an interactive, premium HTML report dashboard.
 * `--json`, `-j` `PATH`: Saves all metadata, candidates, and detection logs in a raw JSON document.
 * `--txt`, `-t` `PATH`: Saves a plain text report matching the console output.
-* `-f`, `--flag-format` `TEXT`: Custom flag format pattern to search for (e.g. `HTB`, `ANIMUS`, `FLAG`).
+* `-f`, `--flag-format` `TEXT`: Custom flag format pattern to search for (e.g. `D7CTF`, `HTB`, `FLAG`).
 
 ### Examples
 Perform a full analysis on an MP3 file, searching for a custom flag prefix:
@@ -88,7 +88,7 @@ wavehunter scan FILE_PATH [OPTIONS]
 ```
 
 ### Options
-* `-f`, `--flag-format` `TEXT`: Custom flag format pattern to search for (e.g. `HTB`, `ANIMUS`, `FLAG`).
+* `-f`, `--flag-format` `TEXT`: Custom flag format pattern to search for (e.g. `D7CTF`, `HTB`, `FLAG`).
 
 ### Examples
 Scan a suspected LSB bitstream for a custom flag pattern:

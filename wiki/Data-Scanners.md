@@ -29,7 +29,7 @@ The regex scanner scans for text sequences matching pattern-based indicators of 
 | Name | Pattern Logic | Example Matches |
 | :--- | :--- | :--- |
 | **Flag** | Matches standard formats like `flag{...}`, `CTF{...}`, `key{...}` or assignments like `secret = ...` | `flag{th1s_is_s3cret}`, `CTF{w4v3_hunt}` |
-| **Custom Flag** | Dynamic user-specified formats passed via `--flag-format` (e.g. `HTB`, `ANIMUS`) | `HTB{fl4g_1s_h3r3}` |
+| **Custom Flag** | Dynamic user-specified formats passed via `--flag-format` (e.g. `D7CTF`, `HTB`) | `D7CTF{fl4g_1s_h3r3}` |
 | **URL** | Matches standard HTTP and HTTPS web URLs | `http://example.com/payload` |
 | **Email** | Matches typical email addresses | `admin@wavehunter.org` |
 | **IPv4 Address**| Matches valid IPv4 dot-decimal representations | `192.168.1.100` |

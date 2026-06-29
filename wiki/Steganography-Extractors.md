@@ -7,7 +7,7 @@ WaveHunter contains a robust collection of modular extractors designed to recons
 ## 1. Bitplane & Multi-Bit Extractor
 Bitplane steganography is the most common technique for hiding data in audio. It involves replacing the least significant bits (LSB) of audio samples with payload bits. WaveHunter implements extensive extraction variations to handle custom steganographic formats.
 
-* **Single Bitplane Extraction**: Isolates a single bit position $b \in [0, \text{bit\_depth}-1]$ from all samples of a specific channel. It supports:
+* **Single Bitplane Extraction**: Isolates a single bit position $b \in [0, \text{bit-depth}-1]$ from all samples of a specific channel. It supports:
   * **MSB Packing**: Packs the first sample's bit into the MSB (bit 7) of the output byte, shifting subsequent bits right.
   * **LSB Packing**: Packs the first sample's bit into the LSB (bit 0) of the output byte, shifting subsequent bits left.
 * **Nibbles**: Extracts 4-bit structures (e.g., bits 0-3 or 4-7) and packs two consecutive nibbles into a single byte.
@@ -38,7 +38,7 @@ Some steganography tools apply simple sample-value transformations before embedd
 
 * **Gray Code**: Converts Gray-encoded samples back to binary ($B_i = B_{i+1} \oplus G_i$) before extracting bitplanes.
 * **Delta (Differential) Decoding**: Decodes differential amplitude encoding. It reconstructs the sequence using:
-  $$s[n] = (raw[n] - raw[n-1]) \pmod{2^{\text{bit\_depth}}}$$
+  $$s[n] = (raw[n] - raw[n-1]) \pmod{2^{\text{bit-depth}}}$$
 
 ---
 

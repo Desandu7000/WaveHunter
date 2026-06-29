@@ -70,7 +70,7 @@ graph TD
 
 ## 6. Constellation Plotting
 Using the `plot` command, you can generate IQ constellation diagrams:
-* The signal is mixed with complex carrier references: $s_{I}[t] = s[t] \cos(2\pi f_c t)$ and $s_{Q}[t] = -s[t] \sin(2\pi f_c t)$.
+* The signal is mixed with complex carrier references: $I[t] = s[t] \cos(2\pi f_c t)$ and $Q[t] = -s[t] \sin(2\pi f_c t)$.
 * Lowpass filtered to isolate the baseband.
 * Sampled at the recovered symbol clock points.
 * Plotted in the complex plane ($I$ vs. $Q$) to visually confirm carrier phases (e.g. two distinct clusters for BPSK).
