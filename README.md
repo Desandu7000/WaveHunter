@@ -9,6 +9,7 @@ Created and maintained by **Desandu Hettiarachchi**.
 ## Features
 
 - **Custom WAV RIFF Parser**: Robust binary parsing of format headers, custom/unknown chunks, list tags, and trailing payload detections (e.g. files appended to the end of WAV data).
+- **Multi-Format Audio Support**: Built-in fallback utilizing `soundfile` to seamlessly load, decode, and run the steganography pipeline on non-WAV formats such as MP3, FLAC, OGG, and more.
 - **Steganography Extractors**:
   - **Bitplanes**: Extract LSB/MSB bits from channel samples.
   - **Channels**: Left, Right, XOR, Difference, and Sum channel manipulations.
@@ -19,7 +20,7 @@ Created and maintained by **Desandu Hettiarachchi**.
   - **Phase Analysis**: Analysis of sample phase angles and Fourier phase coding.
 - **Data Scanners**:
   - **Magic Signatures**: Database-driven matching for file formats (ZIP, PNG, JPEG, ELF, EXE, PDF, GZIP, etc.).
-  - **Regex Scanner**: Flags (`flag{...}`, `CTF{...}`), URLs, IPs, base64 strings, and hex sequences.
+  - **Regex Scanner**: Flags (`flag{...}`, `CTF{...}`), custom user formats, URLs, IPs, base64 strings, and hex sequences.
   - **ASCII & Printable Text**: Locate sequences of readable characters.
   - **Decompression**: Auto-extract zlib/gzip/deflate streams embedded in sample data.
 - **Reporting & Visualization**:
@@ -45,9 +46,9 @@ pip install -e .
 WaveHunter is invoked via the CLI:
 
 ### 1. Analyze an Audio File
-Runs the full suite of extractors, scanners, and entropy checks, scoring candidate streams and generating reports:
+Runs the full suite of extractors, scanners, and entropy checks, scoring candidate streams and generating reports. You can also specify a custom flag format (e.g. `HTB`, `ANIMUS`, `FLAG`):
 ```bash
-wavehunter analyze sample.wav --html-report report.html --json-report report.json
+wavehunter analyze sample.wav --html report.html --json report.json --flag-format HTB
 ```
 
 ### 2. Extract Specific Streams
@@ -57,9 +58,9 @@ wavehunter extract sample.wav bitplane --channel 0 --bit 0 --out output.bin
 ```
 
 ### 3. Scan a Stream File
-Scan raw binary files for flags, magic headers, or ASCII strings:
+Scan raw binary files for flags, magic headers, or ASCII strings (supports custom flag format):
 ```bash
-wavehunter scan output.bin
+wavehunter scan output.bin --flag-format HTB
 ```
 
 ---

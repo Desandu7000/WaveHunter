@@ -36,70 +36,130 @@ class WavFile:
             file_bytes = f.read()
 
         if len(file_bytes) < 12:
-            raise ValueError("File is too small to be a valid WAV file.")
+            raise ValueError("File is too small to be a valid audio file.")
 
-        # Check RIFF header
-        riff_header, riff_size, wave_header = struct.unpack("<4sI4s", file_bytes[0:12])
-        if riff_header != b"RIFF" or wave_header != b"WAVE":
-            raise ValueError(f"Invalid WAV file format header: {riff_header} {wave_header}")
-        
-        self.riff_size = riff_size
-        
-        # Traverse chunks
-        offset = 12
-        max_chunk_end = 12
-        file_len = len(file_bytes)
+        is_wav = False
+        try:
+            # Check RIFF header
+            riff_header, riff_size, wave_header = struct.unpack("<4sI4s", file_bytes[0:12])
+            if riff_header == b"RIFF" and wave_header == b"WAVE":
+                is_wav = True
+        except Exception:
+            pass
 
-        while offset + 8 <= file_len:
-            chunk_id, chunk_size = struct.unpack("<4sI", file_bytes[offset:offset+8])
-            chunk_start = offset
-            data_start = offset + 8
+        if is_wav:
+            self.riff_size = riff_size
             
-            # Align chunk_size to even bytes as per RIFF standard
-            aligned_size = chunk_size + (chunk_size % 2)
-            chunk_end = data_start + aligned_size
+            # Traverse chunks
+            offset = 12
+            max_chunk_end = 12
+            file_len = len(file_bytes)
+
+            while offset + 8 <= file_len:
+                chunk_id, chunk_size = struct.unpack("<4sI", file_bytes[offset:offset+8])
+                chunk_start = offset
+                data_start = offset + 8
+                
+                # Align chunk_size to even bytes as per RIFF standard
+                aligned_size = chunk_size + (chunk_size % 2)
+                chunk_end = data_start + aligned_size
+                
+                if chunk_end > file_len:
+                    # Truncated chunk or malformed file, read as much as possible
+                    chunk_data_bytes = file_bytes[data_start:file_len]
+                    chunk_end = file_len
+                else:
+                    chunk_data_bytes = file_bytes[data_start:data_start+chunk_size]
+
+                chunk_info = {
+                    "id": chunk_id.decode("ascii", errors="ignore").strip(),
+                    "size": chunk_size,
+                    "offset": data_start,
+                    "raw_id": chunk_id.decode("ascii", errors="ignore")
+                }
+                self.chunks.append(chunk_info)
+
+                # Parse known chunks
+                if chunk_id == b"fmt ":
+                    self._parse_fmt_chunk(chunk_data_bytes)
+                elif chunk_id == b"data":
+                    self.raw_data_bytes = chunk_data_bytes
+                elif chunk_id == b"LIST":
+                    self._parse_list_chunk(chunk_data_bytes)
+
+                offset = chunk_end
+                if chunk_end > max_chunk_end:
+                    max_chunk_end = chunk_end
+
+            # Calculate trailer data (appended payload)
+            # 1. Bytes after the maximum chunk end
+            # 2. Bytes after the RIFF size + 8 boundary
+            trailer_start_by_chunks = max_chunk_end
+            trailer_start_by_riff = riff_size + 8
             
-            if chunk_end > file_len:
-                # Truncated chunk or malformed file, read as much as possible
-                chunk_data_bytes = file_bytes[data_start:file_len]
-                chunk_end = file_len
-            else:
-                chunk_data_bytes = file_bytes[data_start:data_start+chunk_size]
+            # We take the minimum of these two to be safe, or chunks end
+            trailer_start = min(trailer_start_by_chunks, trailer_start_by_riff)
+            if trailer_start < file_len:
+                self.trailer_data = file_bytes[trailer_start:]
 
-            chunk_info = {
-                "id": chunk_id.decode("ascii", errors="ignore").strip(),
-                "size": chunk_size,
-                "offset": data_start,
-                "raw_id": chunk_id.decode("ascii", errors="ignore")
-            }
-            self.chunks.append(chunk_info)
-
-            # Parse known chunks
-            if chunk_id == b"fmt ":
-                self._parse_fmt_chunk(chunk_data_bytes)
-            elif chunk_id == b"data":
-                self.raw_data_bytes = chunk_data_bytes
-            elif chunk_id == b"LIST":
-                self._parse_list_chunk(chunk_data_bytes)
-
-            offset = chunk_end
-            if chunk_end > max_chunk_end:
-                max_chunk_end = chunk_end
-
-        # Calculate trailer data (appended payload)
-        # 1. Bytes after the maximum chunk end
-        # 2. Bytes after the RIFF size + 8 boundary
-        trailer_start_by_chunks = max_chunk_end
-        trailer_start_by_riff = riff_size + 8
-        
-        # We take the minimum of these two to be safe, or chunks end
-        trailer_start = min(trailer_start_by_chunks, trailer_start_by_riff)
-        if trailer_start < file_len:
-            self.trailer_data = file_bytes[trailer_start:]
-
-        # If data chunk was found, decode the samples
-        if self.raw_data_bytes and self.channels > 0:
-            self._decode_samples()
+            # If data chunk was found, decode the samples
+            if self.raw_data_bytes and self.channels > 0:
+                self._decode_samples()
+        else:
+            # Fallback to soundfile for other formats (MP3, FLAC, OGG, etc.)
+            try:
+                import soundfile as sf
+                data, samplerate = sf.read(self.file_path, dtype='float32')
+                info = sf.info(self.file_path)
+                
+                self.riff_size = 0
+                self.sample_rate = samplerate
+                
+                if len(data.shape) > 1:
+                    self.channels = data.shape[1]
+                else:
+                    self.channels = 1
+                    data = data.reshape(-1, 1)
+                    
+                subtype = info.subtype
+                if "16" in subtype:
+                    self.bits_per_sample = 16
+                elif "24" in subtype:
+                    self.bits_per_sample = 24
+                elif "32" in subtype:
+                    self.bits_per_sample = 32
+                elif "FLOAT" in subtype:
+                    self.bits_per_sample = 32
+                elif "64" in subtype:
+                    self.bits_per_sample = 64
+                elif "8" in subtype:
+                    self.bits_per_sample = 8
+                else:
+                    self.bits_per_sample = 16
+                    
+                self.audio_format = 3 if "FLOAT" in subtype or "DOUBLE" in subtype else 1
+                self.normalized_samples = data
+                
+                if self.bits_per_sample == 16:
+                    self.raw_samples = (data * 32768.0).astype(np.int32)
+                elif self.bits_per_sample == 24:
+                    self.raw_samples = (data * 8388608.0).astype(np.int32)
+                elif self.bits_per_sample == 32:
+                    self.raw_samples = (data * 2147483648.0).astype(np.int32)
+                elif self.bits_per_sample == 8:
+                    self.raw_samples = (data * 128.0 + 128.0).astype(np.int32)
+                else:
+                    self.raw_samples = (data * 32768.0).astype(np.int32)
+                    
+                self.raw_samples = self.raw_samples.reshape(-1, self.channels)
+                self.normalized_samples = self.normalized_samples.reshape(-1, self.channels)
+                
+                self.raw_data_bytes = file_bytes
+                self.chunks = []
+                self.metadata = {}
+                self.trailer_data = b""
+            except Exception as e:
+                raise ValueError(f"Failed to parse audio file with WAV parser and soundfile fallback: {e}")
 
     def _parse_fmt_chunk(self, data: bytes):
         if len(data) < 16:

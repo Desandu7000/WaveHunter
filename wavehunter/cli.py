@@ -59,22 +59,23 @@ def print_banner():
 
 @app.command()
 def analyze(
-    file_path: Path = typer.Argument(..., help="Path to the WAV file to analyze.", exists=True, dir_okay=False),
+    file_path: Path = typer.Argument(..., help="Path to the audio file to analyze.", exists=True, dir_okay=False),
     html_report: Optional[Path] = typer.Option(None, "--html", "-o", help="Path to save the HTML dashboard report."),
     json_report: Optional[Path] = typer.Option(None, "--json", "-j", help="Path to save the JSON data report."),
-    txt_report: Optional[Path] = typer.Option(None, "--txt", "-t", help="Path to save the text report.")
+    txt_report: Optional[Path] = typer.Option(None, "--txt", "-t", help="Path to save the text report."),
+    flag_format: Optional[str] = typer.Option(None, "--flag-format", "-f", help="Custom flag format pattern to search for (e.g. 'FLAG', 'ANIMUS').")
 ):
     """
-    Performs a full forensic analysis scan on a WAV file.
+    Performs a full forensic analysis scan on an audio file.
     Applies all extractors and scanners, ranks candidates, and generates reports.
     """
     print_banner()
     
-    console.print(f"[yellow][*][/yellow] Loading WAV file: [bold green]{file_path}[/bold green]")
+    console.print(f"[yellow][*][/yellow] Loading audio file: [bold green]{file_path}[/bold green]")
     try:
         wav = WavFile(file_path)
     except Exception as e:
-        console.print(f"[bold red]Error parsing WAV file: {e}[/bold red]")
+        console.print(f"[bold red]Error parsing audio file: {e}[/bold red]")
         sys.exit(1)
         
     info = wav.info_dict
@@ -100,7 +101,7 @@ def analyze(
         console=console
     ) as progress:
         task = progress.add_task("[cyan]Running full forensic analysis pipeline...", total=1)
-        result = run_full_analysis(wav)
+        result = run_full_analysis(wav, flag_format=flag_format)
         progress.update(task, completed=1)
 
     ranked = result.ranked
@@ -325,7 +326,8 @@ def extract(
 
 @app.command()
 def scan(
-    file_path: Path = typer.Argument(..., help="Path to raw binary file or stream to scan.", exists=True, dir_okay=False)
+    file_path: Path = typer.Argument(..., help="Path to raw binary file or stream to scan.", exists=True, dir_okay=False),
+    flag_format: Optional[str] = typer.Option(None, "--flag-format", "-f", help="Custom flag format pattern to search for.")
 ):
     """
     Scans a raw binary file for signs of hidden payloads (signatures, flags, text).
@@ -339,7 +341,7 @@ def scan(
     console.print(f"[yellow][*][/yellow] Entropy: [bold]{entropy:.4f}[/bold] / 8.00")
     
     magics = scan_magic(data)
-    regexes = scan_regex(data)
+    regexes = scan_regex(data, flag_format=flag_format)
     comps = scan_compression(data)
     asciis = scan_ascii(data, min_len=6)
     

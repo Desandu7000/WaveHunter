@@ -158,7 +158,8 @@ def run_extraction_pipeline(wav: WavFile) -> tuple[List[Dict[str, Any]], List[st
 def run_full_analysis(
     wav: WavFile, 
     depth: int = 0, 
-    max_depth: int = 2
+    max_depth: int = 2,
+    flag_format: Optional[str] = None
 ) -> AnalysisResult:
     """Execute the complete WaveHunter forensic analysis pipeline with recursive processing."""
     candidates, extraction_log = run_extraction_pipeline(wav)
@@ -173,11 +174,12 @@ def run_full_analysis(
         if not is_suspected:
             continue
             
-        dec_results = run_decoder_pipeline(cand["data"], max_depth=1, fast_mode=True)
+        dec_results = run_decoder_pipeline(cand["data"], max_depth=1, fast_mode=True, flag_format=flag_format)
         for r in dec_results:
             path_str = " -> ".join(r["path"])
             if len(r["path"]) > 1:
-                contains_flag = any(b"flag" in r["data"].lower() or b"ctf" in r["data"].lower() or b"animus" in r["data"].lower() for b in [True])
+                flag_lower = flag_format.lower().encode("utf-8", errors="ignore") if flag_format else b""
+                contains_flag = b"flag" in r["data"].lower() or b"ctf" in r["data"].lower() or (bool(flag_lower) and flag_lower in r["data"].lower())
                 if r["printable_ratio"] > 0.7 or contains_flag:
                     decoded_candidates.append({
                         "name": f"{cand['name']} ({path_str})",
@@ -213,7 +215,7 @@ def run_full_analysis(
     entropy_windows = sliding_window_entropy(wav.raw_data_bytes, window_size=2048, step_size=1024)
 
     # Run SIGINT Coordinator
-    sigint_report = coordinate_sigint_analysis(wav.normalized_samples, wav.sample_rate, max_depth=max_depth)
+    sigint_report = coordinate_sigint_analysis(wav.normalized_samples, wav.sample_rate, max_depth=max_depth, flag_format=flag_format)
 
     # Compile initial AnalysisResult
     result = AnalysisResult(
@@ -260,7 +262,7 @@ def run_full_analysis(
                         temp_path = Path(tf.name)
                         
                     nested_wav = WavFile(temp_path)
-                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth)
+                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format)
                     nested_result.info["file_name"] = f"[Embedded WAV in {name}] {nested_result.info['file_name']}"
                     result.recursive_results.append(nested_result)
                     
@@ -288,7 +290,7 @@ def run_full_analysis(
                                         temp_path = Path(tf.name)
                                         
                                     nested_wav = WavFile(temp_path)
-                                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth)
+                                    nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format)
                                     nested_result.info["file_name"] = f"[ZIP:{file_info.filename} in {name}] {nested_result.info['file_name']}"
                                     result.recursive_results.append(nested_result)
                                     
@@ -310,7 +312,7 @@ def run_full_analysis(
                             temp_path = Path(tf.name)
                             
                         nested_wav = WavFile(temp_path)
-                        nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth)
+                        nested_result = run_full_analysis(nested_wav, depth=depth + 1, max_depth=max_depth, flag_format=flag_format)
                         nested_result.info["file_name"] = f"[GZIP Decompressed WAV in {name}] {nested_result.info['file_name']}"
                         result.recursive_results.append(nested_result)
                         
@@ -329,7 +331,8 @@ def run_full_analysis(
             for m in b64_matches:
                 try:
                     decoded = base64.b64decode(m.group(0))
-                    if b"ANIMUS{" in decoded:
+                    flag_upper = flag_format.upper().encode("utf-8", errors="ignore") if flag_format else b"FLAG{"
+                    if flag_upper in decoded or b"FLAG{" in decoded:
                         dummy = AnalysisResult(info={"file_name": f"[Base64 decoded in {name}]"}, candidates=[{"name": "Base64 Flag", "source": "base64", "data": decoded}])
                         result.recursive_results.append(dummy)
                 except Exception:

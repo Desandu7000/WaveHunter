@@ -129,7 +129,7 @@ def test_decoders():
 
 def test_pattern_intelligence():
     data = b"Some filler data animus{f0r3ns1cs_is_fun} more filler"
-    findings = scan_intelligence_patterns(data)
+    findings = scan_intelligence_patterns(data, flag_format="animus")
     assert len(findings) > 0
     assert findings[0]["type"] == "Specific Flag (ANIMUS)"
     assert findings[0]["value"] == "animus{f0r3ns1cs_is_fun}"

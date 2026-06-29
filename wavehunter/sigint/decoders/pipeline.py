@@ -40,7 +40,8 @@ def run_decoder_pipeline(
     max_depth: int = 3, 
     current_path: List[str] = None,
     visited_hashes: Set[int] = None,
-    fast_mode: bool = False
+    fast_mode: bool = False,
+    flag_format: str | None = None
 ) -> List[Dict[str, Any]]:
     """
     Recursively applies multiple decoding layers to a byte stream.
@@ -58,6 +59,16 @@ def run_decoder_pipeline(
     visited_hashes.add(data_hash)
     
     candidates = []
+    
+    flag_lower = flag_format.lower().encode("utf-8", errors="ignore") if flag_format else b""
+    
+    def check_contains_flag(stream: bytes) -> bool:
+        stream_lower = stream.lower()
+        if b"flag" in stream_lower or b"ctf" in stream_lower:
+            return True
+        if flag_lower and flag_lower in stream_lower:
+            return True
+        return False
     
     if not fast_mode:
         # 1. Base64
@@ -110,7 +121,7 @@ def run_decoder_pipeline(
         # 10. Single Byte XOR
         xor_candidates = brute_force_xor(data)
         for key, xored, ratio in xor_candidates[:3]:
-            contains_flag = any(b"flag" in xored.lower() or b"ctf" in xored.lower() or b"animus" in xored.lower() for b in [True])
+            contains_flag = check_contains_flag(xored)
             if is_useful_stream(data, xored) and (ratio > 0.65 or contains_flag):
                 candidates.append({"data": xored, "path": current_path + [f"xor_k{key}"]})
 
@@ -118,19 +129,21 @@ def run_decoder_pipeline(
             
     # 11. Multi-byte XOR (Vigenere) and RC4 with common keys
     import hashlib
-    common_keys = [b"EDEN-1499", b"EDEN1499", b"sparrows", b"sparrow", b"abstergo", b"animus", b"CELL-NINE"]
+    common_keys = [b"key", b"secret", b"password"]
+    if flag_lower:
+        common_keys.append(flag_lower)
     all_keys = []
     for k in common_keys:
         all_keys.extend([k, hashlib.md5(k).digest(), hashlib.sha256(k).digest()])
         
     for k in all_keys:
         vig = decode_vigenere(data, k)
-        contains_flag_vig = any(b"flag" in vig.lower() or b"ctf" in vig.lower() or b"animus" in vig.lower() for b in [True])
+        contains_flag_vig = check_contains_flag(vig)
         if is_useful_stream(data, vig) and (compute_printable_ratio(vig) > 0.6 or contains_flag_vig):
             candidates.append({"data": vig, "path": current_path + [f"vigenere_{k.hex()[:8]}"]})
             
         rc4 = decode_rc4(data, k)
-        contains_flag_rc4 = any(b"flag" in rc4.lower() or b"ctf" in rc4.lower() or b"animus" in rc4.lower() for b in [True])
+        contains_flag_rc4 = check_contains_flag(rc4)
         if is_useful_stream(data, rc4) and (compute_printable_ratio(rc4) > 0.6 or contains_flag_rc4):
             candidates.append({"data": rc4, "path": current_path + [f"rc4_{k.hex()[:8]}"]})
 
@@ -154,7 +167,9 @@ def run_decoder_pipeline(
             cand["data"],
             max_depth=max_depth,
             current_path=cand["path"],
-            visited_hashes=visited_hashes
+            visited_hashes=visited_hashes,
+            fast_mode=fast_mode,
+            flag_format=flag_format
         )
         all_results.extend(child_res)
         

@@ -2,7 +2,6 @@ import re
 from typing import List, Dict, Any
 
 PATTERNS = {
-    "Specific Flag (ANIMUS)": (rb'(?i)animus\s*\{[a-zA-Z0-9_\-\.\!\?\#\(\)\@\$\%\^\&\*\s]+\}', 1.0),
     "Specific Flag (CTF/HTB/picoCTF)": (rb'(?i)(?:ctf|htb|picoctf|flag)\s*\{[a-zA-Z0-9_\-\.\!\?\#\(\)\@\$\%\^\&\*\s]+\}', 1.0),
     "Generic Flag Pattern": (rb'\b[a-zA-Z0-9_\-]{3,15}\s*\{[a-zA-Z0-9_\-\.\!\?\#\(\)\@\$\%\^\&\*\s]{4,60}\}\b', 0.85),
     "JWT Token": (rb'\beyJhbGciOi[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*\b', 0.95),
@@ -17,14 +16,21 @@ PATTERNS = {
     "Hex Hash (SHA256)": (rb'\b[a-fA-F0-9]{64}\b', 0.75)
 }
 
-def scan_intelligence_patterns(data: bytes) -> List[Dict[str, Any]]:
+def scan_intelligence_patterns(data: bytes, flag_format: str | None = None) -> List[Dict[str, Any]]:
     """
     Scans a byte stream for intelligence indicators (flags, credentials, networks, crypto).
     Returns findings with calculated weights and confidence ratings.
     """
     findings = []
     
-    for name, (pattern, base_confidence) in PATTERNS.items():
+    # Copy patterns dictionary to allow dynamic additions
+    local_patterns = dict(PATTERNS)
+    if flag_format:
+        flag_fmt_b = flag_format.encode("utf-8", errors="ignore")
+        flag_fmt_esc = re.escape(flag_fmt_b)
+        local_patterns[f"Specific Flag ({flag_format.upper()})"] = (rb'(?i)' + flag_fmt_esc + rb'\s*\{[a-zA-Z0-9_\-\.\!\?\#\(\)\@\$\%\^\&\*\s]+\}', 1.0)
+    
+    for name, (pattern, base_confidence) in local_patterns.items():
         compiled = re.compile(pattern)
         for m in compiled.finditer(data):
             try:

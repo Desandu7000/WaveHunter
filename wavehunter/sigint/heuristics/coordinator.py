@@ -20,7 +20,8 @@ from wavehunter.sigint.intelligence.patterns import scan_intelligence_patterns
 def coordinate_sigint_analysis(
     samples: np.ndarray, 
     sample_rate: int,
-    max_depth: int = 2
+    max_depth: int = 2,
+    flag_format: str | None = None
 ) -> Dict[str, Any]:
     """
     Heuristic coordination engine that runs signal fingerprinting, 
@@ -92,7 +93,7 @@ def coordinate_sigint_analysis(
     seen_decoded_data = set()
     
     for cand in demod_candidates:
-        dec_results = run_decoder_pipeline(cand["data"], max_depth=max_depth)
+        dec_results = run_decoder_pipeline(cand["data"], max_depth=max_depth, flag_format=flag_format)
         for r in dec_results:
             d_hash = hash(r["data"])
             if d_hash not in seen_decoded_data:
@@ -110,7 +111,7 @@ def coordinate_sigint_analysis(
     
     # Also scan direct demodulated data if not fully decoded
     for cand in demod_candidates:
-        direct_matches = scan_intelligence_patterns(cand["data"])
+        direct_matches = scan_intelligence_patterns(cand["data"], flag_format=flag_format)
         for m in direct_matches:
             ranked_findings.append({
                 "source": cand["source"],
@@ -122,7 +123,7 @@ def coordinate_sigint_analysis(
             
     # Scan all decoded outcomes
     for df in decoded_findings:
-        matches = scan_intelligence_patterns(df["data"])
+        matches = scan_intelligence_patterns(df["data"], flag_format=flag_format)
         for m in matches:
             # Combined confidence score of finding and decoding success
             score = m["confidence"] * (1.0 - (df["entropy"] / 8.0) * 0.1)

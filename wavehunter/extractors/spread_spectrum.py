@@ -15,8 +15,7 @@ def extract_dsss(samples: np.ndarray, bits_per_sample: int) -> List[Dict[str, An
         return candidates
         
     common_seeds = [
-        "1234", "0", "42", "1337", "sparrows", "sparrow", 
-        "abstergo", "ABSTERGO", "animus", "ANIMUS"
+        "1234", "0", "42", "1337", "sparrows", "sparrow"
     ]
     
     # We will just try applying Python's random with these seeds on the LSB plane.

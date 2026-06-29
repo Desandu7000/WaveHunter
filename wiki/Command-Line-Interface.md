@@ -16,7 +16,7 @@ wavehunter analyze --help
 
 ## 1. The `analyze` Command
 
-Runs the full forensic analysis pipeline on a WAV file. This includes parsing metadata, evaluating statistical variances, searching for digital carrier modulations, extracting steganographic streams across multiple configurations, running data scanners on all candidate streams, and ranking the findings by confidence.
+Runs the full forensic analysis pipeline on an audio file (supports WAV, MP3, FLAC, OGG, etc.). This includes parsing metadata, evaluating statistical variances, searching for digital carrier modulations, extracting steganographic streams across multiple configurations, running data scanners on all candidate streams, and ranking the findings by confidence.
 
 ### Syntax
 ```bash
@@ -27,11 +27,12 @@ wavehunter analyze FILE_PATH [OPTIONS]
 * `--html`, `-o` `PATH`: Saves an interactive, premium HTML report dashboard.
 * `--json`, `-j` `PATH`: Saves all metadata, candidates, and detection logs in a raw JSON document.
 * `--txt`, `-t` `PATH`: Saves a plain text report matching the console output.
+* `-f`, `--flag-format` `TEXT`: Custom flag format pattern to search for (e.g. `HTB`, `ANIMUS`, `FLAG`).
 
 ### Examples
-Perform a silent full analysis and save reports in all formats:
+Perform a full analysis on an MP3 file, searching for a custom flag prefix:
 ```bash
-wavehunter analyze audio_mystery.wav -o report.html -j report.json -t report.txt
+wavehunter analyze audio_mystery.mp3 -o report.html -j report.json -f HTB
 ```
 
 ---
@@ -83,13 +84,16 @@ Scans a raw binary file (such as one extracted via the `extract` command, or an 
 
 ### Syntax
 ```bash
-wavehunter scan FILE_PATH
+wavehunter scan FILE_PATH [OPTIONS]
 ```
 
+### Options
+* `-f`, `--flag-format` `TEXT`: Custom flag format pattern to search for (e.g. `HTB`, `ANIMUS`, `FLAG`).
+
 ### Examples
-Scan a suspected LSB bitstream for flags or embedded files:
+Scan a suspected LSB bitstream for a custom flag pattern:
 ```bash
-wavehunter scan lsb_channel0.bin
+wavehunter scan lsb_channel0.bin -f HTB
 ```
 
 *Output Console Highlights:*

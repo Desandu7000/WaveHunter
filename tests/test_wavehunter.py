@@ -187,3 +187,27 @@ def test_relationships_extractor():
     sources = {r["source"] for r in rels}
     assert "rel_ch_xor" in sources
     assert any("rel_consec_diff" in s for s in sources)
+
+
+def test_custom_flag_format():
+    custom_flag_data = b"Some noise and MYCUSTOMFLAG{dynamic_format_success} and more noise"
+    matches = scan_regex(custom_flag_data, flag_format="MYCUSTOMFLAG")
+    assert len(matches) > 0
+    assert any(m["type"] == "Custom Flag" and "MYCUSTOMFLAG{dynamic_format_success}" in m["value"] for m in matches)
+
+
+def test_non_wav_soundfile_fallback():
+    import soundfile as sf
+    with tempfile.TemporaryDirectory() as tmpdir:
+        flac_path = Path(tmpdir) / "test.flac"
+        # Generate some synthetic stereo signal
+        data = np.random.uniform(-0.5, 0.5, (1000, 2)).astype(np.float32)
+        sf.write(flac_path, data, 44100, format='FLAC')
+        
+        # Load using WavFile (which should fall back to soundfile)
+        audio = WavFile(flac_path)
+        assert audio.channels == 2
+        assert audio.sample_rate == 44100
+        assert audio.bits_per_sample == 16  # default flac subtype is usually PCM_16
+        assert audio.normalized_samples.shape[0] == 1000
+        assert audio.normalized_samples.shape[1] == 2

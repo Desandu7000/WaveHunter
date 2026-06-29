@@ -64,7 +64,7 @@ graph TD
     C -->|Recursive Step| B
 ```
 
-* **XOR & Keyed Cryptanalysis**: The pipeline automatically runs brute-force single-byte XOR scans and tests multi-byte XOR (Vigenere) and RC4 using common repository keys (e.g. `EDEN-1499`, `sparrows`, `animus`, `abstergo`).
+* **XOR & Keyed Cryptanalysis**: The pipeline automatically runs brute-force single-byte XOR scans and tests multi-byte XOR (Vigenere) and RC4 using common keys and any user-specified flag formats.
 
 ---
 
