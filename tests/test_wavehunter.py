@@ -197,7 +197,7 @@ def test_custom_flag_format():
 
 
 def test_non_wav_soundfile_fallback():
-    import soundfile as sf
+    sf = pytest.importorskip("soundfile")
     with tempfile.TemporaryDirectory() as tmpdir:
         flac_path = Path(tmpdir) / "test.flac"
         # Generate some synthetic stereo signal
