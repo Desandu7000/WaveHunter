@@ -30,6 +30,11 @@ htmlcov/
 *.mp3
 *.bin
 *.jpg
+*.png
 *report.html
 *report.json
 *report.txt
+plots/
+decrypted_images/
+full_images/
+

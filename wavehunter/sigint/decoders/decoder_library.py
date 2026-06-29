@@ -157,3 +157,19 @@ def decode_gray(data: bytes) -> bytes:
             mask >>= 1
         res.append(val)
     return bytes(res)
+
+def decode_rc4(data: bytes, key: bytes) -> bytes:
+    """Decodes RC4 encrypted byte stream."""
+    try:
+        from Crypto.Cipher import ARC4
+        return ARC4.new(key).decrypt(data)
+    except Exception:
+        return b""
+
+def decode_vigenere(data: bytes, key: bytes) -> bytes:
+    """Decodes Vigenere (XOR) encrypted byte stream."""
+    try:
+        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+    except Exception:
+        return b""
+

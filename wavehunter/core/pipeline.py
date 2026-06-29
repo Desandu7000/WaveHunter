@@ -162,6 +162,30 @@ def run_full_analysis(
 ) -> AnalysisResult:
     """Execute the complete WaveHunter forensic analysis pipeline with recursive processing."""
     candidates, extraction_log = run_extraction_pipeline(wav)
+    
+    # Run decoder pipeline on all candidates to uncover hidden/encrypted layers
+    from wavehunter.sigint.decoders.pipeline import run_decoder_pipeline
+    
+    decoded_candidates = []
+    for cand in candidates:
+        # Fast filter: only decode suspected candidate sources (e.g. Bit 9, Stride 256, or DWT)
+        is_suspected = "_b9_" in cand["source"] or "s256" in cand["source"] or "dwt" in cand["source"]
+        if not is_suspected:
+            continue
+            
+        dec_results = run_decoder_pipeline(cand["data"], max_depth=1, fast_mode=True)
+        for r in dec_results:
+            path_str = " -> ".join(r["path"])
+            if len(r["path"]) > 1:
+                contains_flag = any(b"flag" in r["data"].lower() or b"ctf" in r["data"].lower() or b"animus" in r["data"].lower() for b in [True])
+                if r["printable_ratio"] > 0.7 or contains_flag:
+                    decoded_candidates.append({
+                        "name": f"{cand['name']} ({path_str})",
+                        "source": f"{cand['source']}_{path_str.replace(' ', '_').replace('->', '_')}",
+                        "data": r["data"]
+                    })
+                    
+    candidates.extend(decoded_candidates)
     ranked = rank_candidates(candidates)
 
     # Map source -> raw data for statistical profiling (ranked results omit data)
