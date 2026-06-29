@@ -3,10 +3,19 @@ from typing import List, Dict, Any
 from wavehunter.core.utils import bits_to_bytes
 from wavehunter.extractors.interleave import pack_to_bytes
 
-def extract_strided(raw_samples: np.ndarray, bits_per_sample: int) -> List[Dict[str, Any]]:
+# In fast mode (default), cap offsets for large strides to avoid combinatorial explosion.
+# Larger strides space samples far apart; offset 0 is sufficient in the vast majority of cases.
+_FULL_OFFSET_STRIDE_LIMIT = 16  # strides <= this get all offsets tested; larger strides get offset 0 only
+
+
+def extract_strided(raw_samples: np.ndarray, bits_per_sample: int, thorough: bool = False) -> List[Dict[str, Any]]:
     """
-    Extracts samples or LSB bits at specific stride intervals (1, 2, 4, 8, 16, 32, 64, 128)
-    testing EVERY possible starting offset.
+    Extracts samples or LSB bits at specific stride intervals (1, 2, 4, 8, 16, 32, 64, 128, 256)
+    testing EVERY possible starting offset for small strides.
+
+    In default (fast) mode, large strides (>16) only test offset 0 to avoid a combinatorial
+    explosion that would generate tens of thousands of candidates for a long audio file.
+    Pass thorough=True to test every offset for every stride (exhaustive — much slower).
     """
     candidates = []
     n_channels = raw_samples.shape[1]
@@ -20,8 +29,14 @@ def extract_strided(raw_samples: np.ndarray, bits_per_sample: int) -> List[Dict[
         unsigned_samples = samples & mask
         
         for stride in strides:
-            # Test every possible starting offset from 0 to (stride - 1)
-            for offset in range(stride):
+            # In fast/default mode, only test all offsets for small strides.
+            # For large strides, offset 0 covers the overwhelmingly common steganography patterns.
+            if thorough or stride <= _FULL_OFFSET_STRIDE_LIMIT:
+                offsets = range(stride)
+            else:
+                offsets = [0]
+
+            for offset in offsets:
                 # Only check if we have enough samples left
                 if len(samples) <= offset:
                     continue
@@ -49,4 +64,3 @@ def extract_strided(raw_samples: np.ndarray, bits_per_sample: int) -> List[Dict[
                                 })
                             
     return candidates
-

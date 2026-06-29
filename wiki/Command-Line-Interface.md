@@ -18,6 +18,8 @@ wavehunter analyze --help
 
 Runs the full forensic analysis pipeline on an audio file (supports WAV, MP3, FLAC, OGG, etc.). This includes parsing metadata, evaluating statistical variances, searching for digital carrier modulations, extracting steganographic streams across multiple configurations, running data scanners on all candidate streams, and ranking the findings by confidence.
 
+> **Fast Mode (Default)**: By default, `analyze` runs in fast mode — stride offset permutations are limited for large strides, and a cheap pre-filter skips obvious noise streams before full scoring. This makes the tool practical for large files on average hardware. Use `--thorough` for a fully exhaustive scan.
+
 ### Syntax
 ```bash
 wavehunter analyze FILE_PATH [OPTIONS]
@@ -28,11 +30,17 @@ wavehunter analyze FILE_PATH [OPTIONS]
 * `--json`, `-j` `PATH`: Saves all metadata, candidates, and detection logs in a raw JSON document.
 * `--txt`, `-t` `PATH`: Saves a plain text report matching the console output.
 * `-f`, `--flag-format` `TEXT`: Custom flag format pattern to search for (e.g. `D7CTF`, `HTB`, `FLAG`).
+* `--thorough`, `-T`: Enable exhaustive analysis — tests all stride offsets and scores every candidate. Significantly slower but leaves nothing untested.
 
 ### Examples
-Perform a full analysis on an MP3 file, searching for a custom flag prefix:
+Standard fast analysis on an MP3 file, searching for a custom flag prefix:
 ```bash
 wavehunter analyze audio_mystery.mp3 -o report.html -j report.json -f HTB
+```
+
+Exhaustive analysis (when fast mode doesn't find anything):
+```bash
+wavehunter analyze audio_mystery.mp3 -f D7CTF --thorough
 ```
 
 ---
