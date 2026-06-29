@@ -110,7 +110,8 @@ def compute_channel_correlation(samples: np.ndarray) -> float:
     if std1 == 0 or std2 == 0:
         return 0.0
         
-    corr = np.corrcoef(ch1, ch2)[0, 1]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        corr = np.corrcoef(ch1, ch2)[0, 1]
     return float(corr) if not np.isnan(corr) else 0.0
 
 def extract_statistical_profile(samples: np.ndarray, sample_rate: int) -> Dict[str, Any]:

@@ -123,8 +123,8 @@ def detect_sweeps(
         # Fit a linear regression
         slope, intercept = np.polyfit(window_times, window_freqs, 1)
         
-        # Calculate correlation coefficient to see how linear it is
-        corr = np.corrcoef(window_times, window_freqs)[0, 1]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            corr = np.corrcoef(window_times, window_freqs)[0, 1]
         
         if not np.isnan(corr) and abs(corr) > 0.85 and abs(slope) >= min_slope_hz_s:
             start_freq = float(window_freqs[0])

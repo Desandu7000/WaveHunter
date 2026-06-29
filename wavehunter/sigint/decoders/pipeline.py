@@ -154,7 +154,7 @@ def run_decoder_pipeline(
             cand["data"],
             max_depth=max_depth,
             current_path=cand["path"],
-            visited_hashes=visited_hashes.copy()
+            visited_hashes=visited_hashes
         )
         all_results.extend(child_res)
         
